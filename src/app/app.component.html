@@ -363,6 +363,8 @@
 <p>可用裝置: {{ availableDevices | json }}</p>
 <p>掃描結果: {{ result | json }}</p>
 
+{{ msg | json }}
+
 <select (change)="onDeviceSelectChange($event.target.value)">
   <option value="" [selected]="!currentDevice">No Device Selected</option>
   <option
@@ -377,9 +379,11 @@
 <zxing-scanner
   [enable]="true"
   [(device)]="currentDevice"
+  [formats]="formats"
   (camerasFound)="onCamerasFound($event)"
   (permissionResponse)="onHasPermission($event)"
   (scanSuccess)="onScanSuccess($event)"
+  (scanComplete)="onScanComplete($event)"
 ></zxing-scanner>
 
 <router-outlet></router-outlet>
