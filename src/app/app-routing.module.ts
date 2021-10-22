@@ -1,10 +1,15 @@
 import { NgModule } from '@angular/core';
 import { RouterModule, Routes } from '@angular/router';
+import { NgxScannerComponent } from './ngx-scanner/ngx-scanner.component';
+import { ZxingBrowserComponent } from './zxing-browser/zxing-browser.component';
 
-const routes: Routes = [];
+const routes: Routes = [
+  { path: 'browser', component: ZxingBrowserComponent },
+  { path: 'ngx', component: NgxScannerComponent },
+];
 
 @NgModule({
   imports: [RouterModule.forRoot(routes)],
-  exports: [RouterModule]
+  exports: [RouterModule],
 })
-export class AppRoutingModule { }
+export class AppRoutingModule {}
