@@ -8,6 +8,7 @@ import {
   ResultPoint,
 } from '@zxing/library';
 import { BehaviorSubject, fromEvent, Observable, Subject } from 'rxjs';
+import { debounceTime } from 'rxjs/operators';
 import { AppInfoDialogComponent } from '../app-info-dialog/app-info-dialog.component';
 import { FormatsDialogComponent } from '../formats-dialog/formats-dialog.component';
 
@@ -35,7 +36,7 @@ export class ZxingBrowserComponent implements OnInit {
   get scannerSetting() {
     let width = this.mainCanvas.nativeElement.width;
     let height = this.mainCanvas.nativeElement.height;
-    let rectWidth = this._scannerSetting?.rectWidth || 300;
+    let rectWidth = this._scannerSetting?.rectWidth || 500;
     let color = this._scannerSetting?.color || 'red';
     let dash = this._scannerSetting?.dash || [5, 10];
     let lineWidth = this._scannerSetting?.lineWidth || 3;
@@ -78,6 +79,8 @@ export class ZxingBrowserComponent implements OnInit {
   torchEnabled = false;
   torchAvailable$ = new BehaviorSubject<boolean>(false);
   tryHarder = false;
+  frameCount = 0;
+  scanPeriod = 120;
 
   constructor(private readonly _dialog: MatDialog) {}
 
@@ -189,10 +192,19 @@ export class ZxingBrowserComponent implements OnInit {
 
   draw() {
     if (this.video.nativeElement.paused || this.video.nativeElement.ended)
-      return false;
+      return;
 
     this.copyVideo();
-    this.scanner$.next();
+
+    this.drawMiddleRect();
+
+    if (++this.frameCount === this.scanPeriod) {
+      this.frameCount = 0;
+    } else {
+      return;
+    }
+
+    this.takeImage();
   }
 
   copyVideo() {
@@ -222,12 +234,10 @@ export class ZxingBrowserComponent implements OnInit {
     const resultCtx = this.resultCanvas.nativeElement.getContext('2d');
     let img = mainCtx.getImageData(x, y, width, height);
     resultCtx.putImageData(img, 0, 0);
-    setTimeout(() => {
-      this.decodeImg();
-    }, 3000);
+    this.decodeImg();
   }
 
-  async decodeImg() {
+  decodeImg() {
     try {
       const result = this.codeReader.decodeFromCanvas(
         this.resultCanvas.nativeElement
