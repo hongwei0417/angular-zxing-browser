@@ -1,9 +1,16 @@
-import { Component, ElementRef, OnInit, ViewChild } from '@angular/core';
+import {
+  AfterViewInit,
+  Component,
+  ElementRef,
+  OnInit,
+  ViewChild,
+} from '@angular/core';
 import { MatDialog } from '@angular/material/dialog';
 import { BrowserMultiFormatReader } from '@zxing/browser';
 import {
   BarcodeFormat,
   BinaryBitmap,
+  DecodeHintType,
   Result,
   ResultPoint,
 } from '@zxing/library';
@@ -17,50 +24,90 @@ import { FormatsDialogComponent } from '../formats-dialog/formats-dialog.compone
   templateUrl: './zxing-browser.component.html',
   styleUrls: ['./zxing-browser.component.scss'],
 })
-export class ZxingBrowserComponent implements OnInit {
+export class ZxingBrowserComponent implements OnInit, AfterViewInit {
   @ViewChild('video') video: ElementRef<HTMLVideoElement>;
   @ViewChild('mainCanvas') mainCanvas: ElementRef<HTMLCanvasElement>;
-  @ViewChild('resultCanvas') resultCanvas: ElementRef<HTMLCanvasElement>;
+  @ViewChild('mainResult') mainResult: ElementRef<HTMLCanvasElement>;
+  @ViewChild('snapshotCanvas') snapshotCanvas: ElementRef<HTMLCanvasElement>;
+  @ViewChild('snapshotResult') snapshotResult: ElementRef<HTMLCanvasElement>;
+
+  private _scannerSetting = null;
+  private _hints: Map<DecodeHintType, any> | null = new Map<
+    DecodeHintType,
+    any
+  >();
 
   currentDevice$ = new BehaviorSubject<MediaDeviceInfo>(null);
   availableDevices$ = new BehaviorSubject<MediaDeviceInfo[]>([]);
+  resultPoints$ = new BehaviorSubject<ResultPoint[]>([]);
   videoLoaded$: Observable<Event>;
   userMedia$ = new Subject();
-  scanner$ = new Subject();
-  _scannerSetting = null;
   codeReader: BrowserMultiFormatReader;
 
-  set scannerSetting(setting) {
-    this._scannerSetting = setting;
+  get hints() {
+    return this._hints;
+  }
+  set hints(hints: Map<DecodeHintType, any>) {
+    this._hints = hints;
+    this.codeReader?.setHints(this._hints);
+  }
+
+  get formats(): BarcodeFormat[] {
+    return this.hints.get(DecodeHintType.POSSIBLE_FORMATS);
+  }
+  set formats(input: BarcodeFormat[]) {
+    if (typeof input === 'string') {
+      throw new Error(
+        'Invalid formats, make sure the [formats] input is a binding.'
+      );
+    }
+
+    const getBarcodeFormatOrFail = (
+      format: string | BarcodeFormat
+    ): BarcodeFormat => {
+      return typeof format === 'string'
+        ? BarcodeFormat[format.trim().toUpperCase()]
+        : format;
+    };
+
+    const formats = input.map((f) => getBarcodeFormatOrFail(f));
+
+    const hints = this.hints;
+
+    hints.set(DecodeHintType.POSSIBLE_FORMATS, formats);
+
+    this.hints = hints;
+  }
+
+  set scannerSetting(data) {
+    this._scannerSetting = data;
   }
   get scannerSetting() {
     let width = this.mainCanvas.nativeElement.width;
     let height = this.mainCanvas.nativeElement.height;
-    let rectWidth = this._scannerSetting?.rectWidth || 500;
+    let rectHeight = this._scannerSetting?.reactHeight || height * 0.2;
+    let rectWidth = this._scannerSetting?.rectWidth || width * 0.7;
     let color = this._scannerSetting?.color || 'red';
     let dash = this._scannerSetting?.dash || [5, 10];
     let lineWidth = this._scannerSetting?.lineWidth || 3;
     let x = width / 2 - rectWidth / 2;
-    let y = height / 2 - rectWidth / 2;
+    let y = height / 2 - rectHeight / 2;
     return {
       x,
       y,
       width: rectWidth,
-      height: rectWidth,
+      height: rectHeight,
       color,
       dash,
       lineWidth,
     };
   }
 
-  constrains = {
+  constrains: any = {
     audio: false,
-    video: {
-      deviceId: null,
-      width: 1920,
-      height: 1080,
-    },
+    video: true,
   };
+
   stream = null;
 
   formatsEnabled: BarcodeFormat[] = [
@@ -73,24 +120,17 @@ export class ZxingBrowserComponent implements OnInit {
   hasDevices: boolean;
   hasPermission: boolean;
 
-  qrResultString: string;
-  message: any;
-
-  torchEnabled = false;
-  torchAvailable$ = new BehaviorSubject<boolean>(false);
-  tryHarder = false;
+  result: string;
+  message: any = '';
   frameCount = 0;
-  scanPeriod = 120;
+  scanPeriod = 60;
 
   constructor(private readonly _dialog: MatDialog) {}
-
-  public context: CanvasRenderingContext2D;
 
   ngOnInit(): void {
     this.currentDevice$.subscribe(this.changeDevice.bind(this));
     this.userMedia$.subscribe(this.loadStream.bind(this));
-    this.scanner$.subscribe(this.drawMiddleRect.bind(this));
-    this.scanner$.subscribe(this.takeImage.bind(this));
+    this.resultPoints$.subscribe(this.drawResult.bind(this));
   }
 
   ngAfterViewInit(): void {
@@ -100,13 +140,13 @@ export class ZxingBrowserComponent implements OnInit {
   }
 
   initVideo() {
-    this.video.nativeElement.style.display = 'none';
     this.videoLoaded$.subscribe(this.loadCanvas.bind(this));
     this.userMedia$.next();
   }
 
   initAnalyzer() {
-    this.codeReader = new BrowserMultiFormatReader();
+    this.formats = this.formatsEnabled;
+    this.codeReader = new BrowserMultiFormatReader(this.hints);
   }
 
   async loadDevices() {
@@ -122,19 +162,29 @@ export class ZxingBrowserComponent implements OnInit {
   async loadStream() {
     try {
       this.stop();
+      this.message = this.constrains;
       const stream = await navigator.mediaDevices.getUserMedia(this.constrains);
       this.hasPermission = true;
-      this.video.nativeElement.srcObject = stream;
-      this.stream = stream;
-      this.loadDevices();
+
+      if (this.currentDevice$.getValue()) {
+        this.video.nativeElement.srcObject = stream;
+        this.video.nativeElement.play();
+        this.stream = stream;
+      }
+
+      await this.loadDevices();
     } catch (error) {
+      this.message = error;
       console.log(error);
     }
   }
 
   loadCanvas() {
-    this.mainCanvas.nativeElement.width = this.video.nativeElement.videoWidth;
-    this.mainCanvas.nativeElement.height = this.video.nativeElement.videoHeight;
+    const { videoWidth, videoHeight } = this.video.nativeElement;
+    this.mainCanvas.nativeElement.width = videoWidth;
+    this.mainCanvas.nativeElement.height = videoHeight;
+    this.mainResult.nativeElement.width = videoWidth;
+    this.mainResult.nativeElement.height = videoHeight;
     this.draw();
   }
 
@@ -153,8 +203,21 @@ export class ZxingBrowserComponent implements OnInit {
   }
 
   changeDevice(device: MediaDeviceInfo) {
-    if (!device) return;
-    this.constrains.video.deviceId = device.deviceId;
+    if (!device) {
+      this.stop();
+      return;
+    }
+    const constrains = {
+      ...this.constrains,
+      video: {
+        deviceId: {
+          exact: device.deviceId,
+        },
+        width: 1920,
+        height: 1080,
+      },
+    };
+    this.constrains = constrains;
     this.userMedia$.next();
   }
 
@@ -168,7 +231,9 @@ export class ZxingBrowserComponent implements OnInit {
       .afterClosed()
       .subscribe((x) => {
         if (x) {
+          console.log(x);
           this.formatsEnabled = x;
+          this.formats = this.formatsEnabled;
         }
       });
   }
@@ -183,20 +248,23 @@ export class ZxingBrowserComponent implements OnInit {
   }
 
   clearResult(): void {
-    this.qrResultString = null;
+    this.result = null;
   }
 
   clearMessage(): void {
     this.message = null;
   }
 
+  test = 0;
+
   draw() {
     if (this.video.nativeElement.paused || this.video.nativeElement.ended)
       return;
 
+    this.message = ++this.test;
     this.copyVideo();
-
     this.drawMiddleRect();
+    requestAnimationFrame(this.draw.bind(this));
 
     if (++this.frameCount === this.scanPeriod) {
       this.frameCount = 0;
@@ -204,13 +272,13 @@ export class ZxingBrowserComponent implements OnInit {
       return;
     }
 
-    this.takeImage();
+    this.captureImage();
+    this.decodeImage();
   }
 
   copyVideo() {
     const ctx = this.mainCanvas.nativeElement.getContext('2d');
     ctx.drawImage(this.video.nativeElement, 0, 0);
-    requestAnimationFrame(this.draw.bind(this));
   }
 
   drawMiddleRect() {
@@ -226,54 +294,80 @@ export class ZxingBrowserComponent implements OnInit {
     ctx.restore();
   }
 
-  takeImage() {
+  captureImage() {
     const { x, y, width, height } = this.scannerSetting;
-    this.resultCanvas.nativeElement.width = width;
-    this.resultCanvas.nativeElement.height = height;
+    const snapshotCanvas = this.snapshotCanvas.nativeElement;
+    const snapshotResult = this.snapshotResult.nativeElement;
+    snapshotCanvas.width = width;
+    snapshotCanvas.height = height;
+    snapshotResult.width = width;
+    snapshotResult.height = height;
     const mainCtx = this.mainCanvas.nativeElement.getContext('2d');
-    const resultCtx = this.resultCanvas.nativeElement.getContext('2d');
+    const resultCtx = snapshotCanvas.getContext('2d');
     let img = mainCtx.getImageData(x, y, width, height);
     resultCtx.putImageData(img, 0, 0);
-    this.decodeImg();
   }
 
-  decodeImg() {
+  decodeImage() {
     try {
       const result = this.codeReader.decodeFromCanvas(
-        this.resultCanvas.nativeElement
+        this.snapshotCanvas.nativeElement
       );
+      this.result = result.getText();
+      this.resultPoints$.next(result.getResultPoints());
       console.log(result);
     } catch (error) {
       console.log('Not Found Result');
+      this.clearPoints();
     }
   }
 
-  drawFrame(resultPoints: ResultPoint[]): void {
+  drawResult(resultPoints: ResultPoint[]): void {
     if (resultPoints.length === 0) return;
 
-    const canvas = this.mainCanvas.nativeElement;
-    const video = this.video.nativeElement;
-    const { clientWidth, clientHeight, videoWidth, videoHeight } = video;
-    const widthRatio = clientWidth / videoWidth;
-    const heightRatio = clientHeight / videoHeight;
+    const mainResult = this.mainResult.nativeElement;
+    const snapshotResult = this.snapshotResult.nativeElement;
+    const { x, y, width, height } = this.scannerSetting;
 
-    // set canvas
-    canvas.width = clientWidth;
-    canvas.height = clientHeight;
-    this.context = canvas.getContext('2d');
-    this.context.lineWidth = 2;
-    this.context.strokeStyle = 'red';
-
-    // draw canvas
-    this.context.beginPath();
-    this.context.moveTo(
-      resultPoints[0].getX() * widthRatio,
-      resultPoints[0].getY() * heightRatio
+    this.drawPoints(
+      mainResult,
+      resultPoints.map((p) => {
+        return { x: x + p.getX(), y: y + p.getY() };
+      })
     );
-    resultPoints.slice(1).forEach((p) => {
-      this.context.lineTo(p.getX() * widthRatio, p.getY() * heightRatio);
+    this.drawPoints(
+      snapshotResult,
+      resultPoints.map((p) => {
+        return { x: p.getX(), y: p.getY() };
+      })
+    );
+  }
+
+  drawPoints(canvas: HTMLCanvasElement, points: any = []): void {
+    // set canvas
+    const ctx = canvas.getContext('2d');
+    ctx.clearRect(0, 0, canvas.width, canvas.height);
+    ctx.lineWidth = 2;
+    ctx.strokeStyle = 'red';
+
+    // draw points
+    ctx.beginPath();
+    ctx.moveTo(points[0].x, points[0].y);
+    points.slice(1).forEach((p) => {
+      ctx.lineTo(p.x, p.y);
     });
-    this.context.closePath();
-    this.context.stroke();
+    ctx.closePath();
+    ctx.stroke();
+  }
+
+  clearPoints(): void {
+    const mainResult = this.mainResult.nativeElement;
+    const snapshotResult = this.snapshotResult.nativeElement;
+
+    const pointersCtx = mainResult.getContext('2d');
+    const resultCtx = snapshotResult.getContext('2d');
+
+    pointersCtx.clearRect(0, 0, mainResult.width, mainResult.height);
+    resultCtx.clearRect(0, 0, snapshotResult.width, snapshotResult.height);
   }
 }

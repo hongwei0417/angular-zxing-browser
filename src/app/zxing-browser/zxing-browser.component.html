@@ -1,16 +1,5 @@
 <div class="scanner-shell" [hidden]="!hasDevices">
   <mat-menu #appMenu="matMenu">
-    <mat-selection-list>
-      <mat-list-option
-        checkboxPosition="start"
-        (click)="toggleTorch()"
-        [selected]="torchEnabled"
-        *ngIf="torchAvailable$ | async"
-      >
-        Enable Torch
-      </mat-list-option>
-    </mat-selection-list>
-    <mat-divider></mat-divider>
     <button mat-menu-item (click)="openFormatsDialog()">Barcode formats</button>
     <button mat-menu-item (click)="openInfoDialog()">App info</button>
   </mat-menu>
@@ -42,10 +31,10 @@
     </button>
   </header>
 
-  <section class="results" *ngIf="qrResultString">
+  <section class="results" *ngIf="result">
     <div>
       <small>Result</small>
-      <strong>{{ qrResultString }}</strong>
+      <strong>{{ result }}</strong>
     </div>
     <button mat-icon-button (click)="clearResult()">&times;</button>
   </section>
@@ -58,16 +47,24 @@
     <button mat-icon-button (click)="clearMessage($event)">&times;</button>
   </section>
 
-  {{ mainCanvas.width + "," + mainCanvas.height }}
-  {{ resultCanvas.width + "," + resultCanvas.height }}
+  <p>影片解析度: {{ mainCanvas.width + "x" + mainCanvas.height }}</p>
+  <p>
+    畫面顯示大小: {{ mainCanvas.offsetWidth + "x" + mainCanvas.offsetHeight }}
+  </p>
+  <p>掃描範圍: {{ snapshotCanvas.width + "x" + snapshotCanvas.height }}</p>
+
+  <p>{{ constrains | json }}</p>
 
   <div class="scanner-container">
     <video #video autoplay></video>
-    <canvas #mainCanvas></canvas>
-    <div #frame class="frame"></div>
+    <canvas #mainCanvas id="mainCanvas"></canvas>
+    <canvas #mainResult id="mainResult"></canvas>
   </div>
 
-  <canvas #resultCanvas></canvas>
+  <div class="snapshot-container">
+    <canvas #snapshotCanvas id="snapshotCanvas"></canvas>
+    <canvas #snapshotResult id="snapshotResult"></canvas>
+  </div>
 </div>
 
 <ng-container *ngIf="hasPermission === undefined">
