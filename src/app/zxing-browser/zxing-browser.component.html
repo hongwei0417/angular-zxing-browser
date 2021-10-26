@@ -1,61 +1,5 @@
 <div class="scanner-shell" [hidden]="!hasDevices">
-  <mat-menu #appMenu="matMenu">
-    <button mat-menu-item (click)="openFormatsDialog()">Barcode formats</button>
-    <button mat-menu-item (click)="openInfoDialog()">App info</button>
-  </mat-menu>
-
-  <header>
-    <mat-form-field appearance="fill">
-      <select
-        matNativeControl
-        matInput
-        (change)="onDeviceSelectChange($event.target.value)"
-      >
-        <option value="" [selected]="!(currentDevice$ | async)">
-          No Device Selected
-        </option>
-        <option
-          *ngFor="let device of availableDevices$ | async"
-          [value]="device.deviceId"
-          [selected]="
-            (currentDevice$ | async) &&
-            device.deviceId === (currentDevice$ | async).deviceId
-          "
-        >
-          {{ device.label }}
-        </option>
-      </select>
-    </mat-form-field>
-    <button mat-icon-button [matMenuTriggerFor]="appMenu">
-      <mat-icon>more_vert</mat-icon>
-    </button>
-  </header>
-
-  <section class="results" *ngIf="result">
-    <div>
-      <small>Result</small>
-      <strong>{{ result }}</strong>
-    </div>
-    <button mat-icon-button (click)="clearResult()">&times;</button>
-  </section>
-
-  <section class="message" *ngIf="message">
-    <div>
-      <small>Message</small>
-      <strong>{{ message | json }}</strong>
-    </div>
-    <button mat-icon-button (click)="clearMessage($event)">&times;</button>
-  </section>
-
-  <p>影片解析度: {{ mainCanvas.width + "x" + mainCanvas.height }}</p>
-  <p>
-    畫面顯示大小: {{ mainCanvas.offsetWidth + "x" + mainCanvas.offsetHeight }}
-  </p>
-  <p>掃描範圍: {{ snapshotCanvas.width + "x" + snapshotCanvas.height }}</p>
-
-  <p>{{ constrains | json }}</p>
-
-  <div class="scanner-container">
+  <div #scanner class="scanner-container">
     <video #video autoplay></video>
     <canvas #mainCanvas id="mainCanvas"></canvas>
     <canvas #mainResult id="mainResult"></canvas>
@@ -65,32 +9,62 @@
     <canvas #snapshotCanvas id="snapshotCanvas"></canvas>
     <canvas #snapshotResult id="snapshotResult"></canvas>
   </div>
+
+  <div class="options">
+    <mat-menu #appMenu="matMenu">
+      <button mat-menu-item (click)="openFormatsDialog()">
+        Barcode formats
+      </button>
+      <button mat-menu-item (click)="openInfoDialog()">App info</button>
+    </mat-menu>
+
+    <header>
+      <mat-form-field appearance="fill">
+        <select
+          matNativeControl
+          matInput
+          (change)="onDeviceSelectChange($event.target.value)"
+        >
+          <option value="" [selected]="!(currentDevice$ | async)">
+            No Device Selected
+          </option>
+          <option
+            *ngFor="let device of availableDevices$ | async"
+            [value]="device.deviceId"
+            [selected]="
+              (currentDevice$ | async) &&
+              device.deviceId === (currentDevice$ | async).deviceId
+            "
+          >
+            {{ device.label }}
+          </option>
+        </select>
+      </mat-form-field>
+      <button mat-icon-button [matMenuTriggerFor]="appMenu">
+        <mat-icon>more_vert</mat-icon>
+      </button>
+    </header>
+
+    <section class="results" *ngIf="result">
+      <div>
+        <small>Result</small>
+        <strong>{{ result }}</strong>
+      </div>
+      <button mat-icon-button (click)="clearResult()">&times;</button>
+    </section>
+
+    <section class="message" *ngIf="message">
+      <div>
+        <small>Message</small>
+        <strong>{{ message | json }}</strong>
+      </div>
+      <button mat-icon-button (click)="clearMessage($event)">&times;</button>
+    </section>
+
+    <p>影片解析度=> 寬:{{ video.videoWidth }}/高:{{ video.videoHeight }}</p>
+    <p>畫面顯示大小=> 寬:{{ video.offsetWidth }}/高:{{ video.offsetHeight }}</p>
+    <p>掃描範圍=> 寬:{{ mainResult.width }}/高:{{ mainResult.height }}</p>
+
+    <p>{{ constrains | json }}</p>
+  </div>
 </div>
-
-<ng-container *ngIf="hasPermission === undefined">
-  <h2>Waiting for permissions.</h2>
-
-  <blockquote>
-    If your device does not has cameras, no permissions will be asked.
-  </blockquote>
-</ng-container>
-
-<ng-container *ngIf="hasPermission === false">
-  <h2>
-    You denied the camera permission, we can't scan anything without it. 😪
-  </h2>
-</ng-container>
-
-<ng-container *ngIf="hasDevices === undefined">
-  <h2>Couldn't check for devices.</h2>
-
-  <blockquote>This may be caused by some security error.</blockquote>
-</ng-container>
-
-<ng-container *ngIf="hasDevices === false">
-  <h2>No devices were found.</h2>
-
-  <blockquote>
-    I believe your device has no media devices attached to.
-  </blockquote>
-</ng-container>

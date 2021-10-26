@@ -1,3 +1,4 @@
+import { DeviceType } from './../deviceType';
 import {
   AfterViewInit,
   Component,
@@ -17,6 +18,7 @@ import {
 import { BehaviorSubject, fromEvent, Observable, Subject } from 'rxjs';
 import { debounceTime } from 'rxjs/operators';
 import { AppInfoDialogComponent } from '../app-info-dialog/app-info-dialog.component';
+import { getDeviceType } from '../deviceType';
 import { FormatsDialogComponent } from '../formats-dialog/formats-dialog.component';
 
 @Component({
@@ -30,6 +32,8 @@ export class ZxingBrowserComponent implements OnInit, AfterViewInit {
   @ViewChild('mainResult') mainResult: ElementRef<HTMLCanvasElement>;
   @ViewChild('snapshotCanvas') snapshotCanvas: ElementRef<HTMLCanvasElement>;
   @ViewChild('snapshotResult') snapshotResult: ElementRef<HTMLCanvasElement>;
+  @ViewChild('scanner') scannerContainer: ElementRef<HTMLDivElement>;
+  private calculateCanvas: HTMLCanvasElement;
 
   private _scannerSetting = null;
   private _hints: Map<DecodeHintType, any> | null = new Map<
@@ -41,6 +45,7 @@ export class ZxingBrowserComponent implements OnInit, AfterViewInit {
   availableDevices$ = new BehaviorSubject<MediaDeviceInfo[]>([]);
   resultPoints$ = new BehaviorSubject<ResultPoint[]>([]);
   videoLoaded$: Observable<Event>;
+  windowResize$: Observable<Event>;
   userMedia$ = new Subject();
   codeReader: BrowserMultiFormatReader;
 
@@ -83,8 +88,8 @@ export class ZxingBrowserComponent implements OnInit, AfterViewInit {
     this._scannerSetting = data;
   }
   get scannerSetting() {
-    let width = this.mainCanvas.nativeElement.width;
-    let height = this.mainCanvas.nativeElement.height;
+    let width = this.calculateCanvas.width;
+    let height = this.calculateCanvas.height;
     let rectHeight = this._scannerSetting?.reactHeight || height * 0.2;
     let rectWidth = this._scannerSetting?.rectWidth || width * 0.7;
     let color = this._scannerSetting?.color || 'red';
@@ -100,6 +105,20 @@ export class ZxingBrowserComponent implements OnInit, AfterViewInit {
       color,
       dash,
       lineWidth,
+    };
+  }
+
+  get videoResolution() {
+    const deviceType = getDeviceType();
+    // if (deviceType === DeviceType.TABLET || deviceType === DeviceType.MOBILE) {
+    //   return {
+    //     width: 720,
+    //     height: 1280,
+    //   };
+    // }
+    return {
+      width: 1280,
+      height: 720,
     };
   }
 
@@ -135,12 +154,15 @@ export class ZxingBrowserComponent implements OnInit, AfterViewInit {
 
   ngAfterViewInit(): void {
     this.videoLoaded$ = fromEvent(this.video.nativeElement, 'loadedmetadata');
+    this.windowResize$ = fromEvent(window, 'resize');
     this.initVideo();
     this.initAnalyzer();
   }
 
   initVideo() {
+    this.calculateCanvas = document.createElement('canvas');
     this.videoLoaded$.subscribe(this.loadCanvas.bind(this));
+    this.windowResize$.subscribe(this.resizeWindow.bind(this));
     this.userMedia$.next();
   }
 
@@ -181,11 +203,31 @@ export class ZxingBrowserComponent implements OnInit, AfterViewInit {
 
   loadCanvas() {
     const { videoWidth, videoHeight } = this.video.nativeElement;
+    this.calculateCanvas.width = videoWidth;
+    this.calculateCanvas.height = videoHeight;
     this.mainCanvas.nativeElement.width = videoWidth;
     this.mainCanvas.nativeElement.height = videoHeight;
     this.mainResult.nativeElement.width = videoWidth;
     this.mainResult.nativeElement.height = videoHeight;
     this.draw();
+  }
+
+  resizeWindow() {
+    const { videoWidth, videoHeight } = this.video.nativeElement;
+    const { offsetWidth, offsetHeight } = document.body;
+    const videoRatio = videoHeight / videoWidth;
+    const currentRatio = offsetHeight / offsetWidth;
+    let maxWidth, maxHeight;
+
+    if (currentRatio > videoRatio) {
+      maxWidth = offsetWidth;
+      maxHeight = offsetWidth * videoRatio;
+    } else {
+      maxWidth = offsetHeight / videoRatio;
+      maxHeight = offsetHeight;
+    }
+    this.scannerContainer.nativeElement.style.maxWidth = `${maxWidth}px`;
+    this.scannerContainer.nativeElement.style.maxHeight = `${maxHeight}px`;
   }
 
   onDeviceSelectChange(selected: string) {
@@ -200,6 +242,7 @@ export class ZxingBrowserComponent implements OnInit, AfterViewInit {
     this.stream.getTracks().forEach((track) => {
       track.stop();
     });
+    this.video.nativeElement.srcObject = null;
   }
 
   changeDevice(device: MediaDeviceInfo) {
@@ -208,13 +251,13 @@ export class ZxingBrowserComponent implements OnInit, AfterViewInit {
       return;
     }
     const constrains = {
-      ...this.constrains,
+      audio: false,
       video: {
         deviceId: {
           exact: device.deviceId,
         },
-        width: 1920,
-        height: 1080,
+        width: this.videoResolution.width,
+        height: this.videoResolution.height,
       },
     };
     this.constrains = constrains;
@@ -257,7 +300,7 @@ export class ZxingBrowserComponent implements OnInit, AfterViewInit {
 
   test = 0;
 
-  draw() {
+  async draw() {
     if (this.video.nativeElement.paused || this.video.nativeElement.ended)
       return;
 
@@ -277,7 +320,7 @@ export class ZxingBrowserComponent implements OnInit, AfterViewInit {
   }
 
   copyVideo() {
-    const ctx = this.mainCanvas.nativeElement.getContext('2d');
+    const ctx = this.calculateCanvas.getContext('2d');
     ctx.drawImage(this.video.nativeElement, 0, 0);
   }
 
@@ -302,7 +345,7 @@ export class ZxingBrowserComponent implements OnInit, AfterViewInit {
     snapshotCanvas.height = height;
     snapshotResult.width = width;
     snapshotResult.height = height;
-    const mainCtx = this.mainCanvas.nativeElement.getContext('2d');
+    const mainCtx = this.calculateCanvas.getContext('2d');
     const resultCtx = snapshotCanvas.getContext('2d');
     let img = mainCtx.getImageData(x, y, width, height);
     resultCtx.putImageData(img, 0, 0);
