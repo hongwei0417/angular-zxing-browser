@@ -6,6 +6,7 @@ import { ZxingBrowserComponent } from './zxing-browser/zxing-browser.component';
 const routes: Routes = [
   { path: 'browser', component: ZxingBrowserComponent },
   { path: 'ngx', component: NgxScannerComponent },
+  { path: '', redirectTo: '/browser', pathMatch: 'full' },
 ];
 
 @NgModule({

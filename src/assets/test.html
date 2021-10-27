@@ -1,0 +1,114 @@
+<!DOCTYPE html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta http-equiv="X-UA-Compatible" content="IE=edge" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Document</title>
+  </head>
+  <body>
+    <script defer>
+      var body = document.body;
+      var camera = document.createElement("video");
+      camera.style.display = "none";
+      // document.body.requestFullscreen()
+      var middle_canvas = document.createElement("canvas");
+      middle_canvas.style.width = "50vw";
+      const RECT_WIDTH = 100;
+      const VIDEO_PIXELS = 720;
+      var result_img = document.createElement("canvas");
+      result_img.width = RECT_WIDTH;
+      result_img.height = RECT_WIDTH;
+
+      camera.autoplay = true;
+      body.append(camera);
+      body.append(middle_canvas);
+      body.append(document.createElement("hr"));
+      body.append(result_img);
+
+      function init_camera() {
+        navigator.mediaDevices
+          .getUserMedia({
+            video: { facingMode: "environment", width: 1280, height: 720 },
+          })
+          .then((device) => {
+            camera.srcObject = device;
+          });
+      }
+
+      camera.onloadedmetadata = function () {
+        let width = this.videoWidth;
+        let height = this.videoHeight;
+        let aspectRatio = width / height;
+        if (width >= height) {
+          camera.height = VIDEO_PIXELS;
+          camera.width = aspectRatio * VIDEO_PIXELS;
+        } else {
+          camera.width = VIDEO_PIXELS;
+          camera.height = VIDEO_PIXELS / aspectRatio;
+        }
+        middle_canvas.width = camera.width;
+        middle_canvas.height = camera.height;
+        camera.play();
+        draw();
+      };
+
+      function draw() {
+        //if (camera.paused || camera.ended) return false;
+
+        copyCamera(middle_canvas);
+        drawRect(middle_canvas);
+        takeImg();
+
+        function copyCamera(canvas) {
+          let ctx = canvas.getContext("2d");
+          ctx.drawImage(camera, 0, 0);
+          requestAnimationFrame(draw);
+        }
+
+        function drawRect(canvas) {
+          let ctx = canvas.getContext("2d");
+          let width = canvas.width;
+          let height = canvas.height;
+          let rect_width = RECT_WIDTH;
+          let rect_color = "red";
+          let rect_dash = [5, 10];
+          let line_width = 3;
+
+          ctx.save();
+          ctx.setLineDash(rect_dash);
+          ctx.lineWidth = line_width;
+          ctx.strokeStyle = rect_color;
+
+          ctx.strokeRect(
+            width / 2 - rect_width / 2,
+            height / 2 - rect_width / 2,
+            rect_width,
+            rect_width
+          );
+          ctx.restore();
+        }
+      }
+
+      function takeImg() {
+        let ctx = middle_canvas.getContext("2d");
+        let canvas = middle_canvas;
+        let width = canvas.width;
+        let height = canvas.height;
+        let rect_width = RECT_WIDTH;
+        let x0 = width / 2 - rect_width / 2;
+        let y0 = height / 2 - rect_width / 2;
+
+        let img = ctx.getImageData(x0, y0, rect_width, rect_width);
+
+        {
+          let ctx = result_img.getContext("2d");
+          ctx.putImageData(img, 0, 0);
+        }
+      }
+
+      init_camera();
+      requestAnimationFrame(draw);
+    </script>
+  </body>
+</html>

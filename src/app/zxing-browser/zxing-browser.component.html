@@ -1,11 +1,12 @@
 <div class="scanner-shell" [hidden]="!hasDevices">
-  <div #scanner class="scanner-container">
+  <div #scannerContainer class="scanner-container">
     <video #video autoplay></video>
     <canvas #mainCanvas id="mainCanvas"></canvas>
     <canvas #mainResult id="mainResult"></canvas>
+    <div #scannerArea class="scanner-area"></div>
   </div>
 
-  <div class="snapshot-container">
+  <div #snapshotContainer class="snapshot-container">
     <canvas #snapshotCanvas id="snapshotCanvas"></canvas>
     <canvas #snapshotResult id="snapshotResult"></canvas>
   </div>
@@ -63,8 +64,10 @@
 
     <p>影片解析度=> 寬:{{ video.videoWidth }}/高:{{ video.videoHeight }}</p>
     <p>畫面顯示大小=> 寬:{{ video.offsetWidth }}/高:{{ video.offsetHeight }}</p>
-    <p>掃描範圍=> 寬:{{ mainResult.width }}/高:{{ mainResult.height }}</p>
-
-    <p>{{ constrains | json }}</p>
+    <p>
+      掃描範圍=> 寬:{{ scannerArea.offsetWidth }}/高:{{
+        scannerArea.offsetHeight
+      }}
+    </p>
   </div>
 </div>
