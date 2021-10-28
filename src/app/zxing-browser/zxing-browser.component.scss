@@ -13,6 +13,7 @@
   top: 0;
   left: 0;
   width: 100%;
+  opacity: 0.7;
 }
 
 .scanner-container {
@@ -34,12 +35,7 @@
     left: 0;
   }
 
-  #mainCanvas {
-    border: 1px solid yellow;
-    display: none;
-  }
-
-  #mainResult {
+  #mainPointers {
     border: 1px solid red;
   }
 
@@ -66,7 +62,7 @@
     height: 100%;
   }
 
-  #snapshotResult {
+  #snapshotPointers {
     position: absolute;
     top: 0;
     left: 0;
@@ -110,12 +106,12 @@ header {
   }
 }
 
-.results {
+.results,
+.message,
+.error {
   position: sticky;
   bottom: 0;
   padding: 15px;
-  background: #02c3c3;
-  color: #fff;
 
   display: flex;
   align-items: center;
@@ -139,6 +135,21 @@ header {
     $mg: 8px;
     margin: (-$mg) (-$mg) (-$mg) $mg;
   }
+}
+
+.results {
+  background: #02c3c3;
+  color: #fff;
+}
+
+.message {
+  background: rgba(100, 202, 100, 0.678);
+  color: black;
+}
+
+.error {
+  background: rgba(244, 67, 54, 0.678);
+  color: black;
 }
 
 .message {

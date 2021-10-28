@@ -1,14 +1,13 @@
 <div class="scanner-shell" [hidden]="!hasDevices">
   <div #scannerContainer class="scanner-container">
     <video #video autoplay></video>
-    <canvas #mainCanvas id="mainCanvas"></canvas>
-    <canvas #mainResult id="mainResult"></canvas>
+    <canvas #mainPointers id="mainPointers"></canvas>
     <div #scannerArea class="scanner-area"></div>
   </div>
 
   <div #snapshotContainer class="snapshot-container">
     <canvas #snapshotCanvas id="snapshotCanvas"></canvas>
-    <canvas #snapshotResult id="snapshotResult"></canvas>
+    <canvas #snapshotPointers id="snapshotPointers"></canvas>
   </div>
 
   <div class="options">
@@ -41,6 +40,21 @@
           </option>
         </select>
       </mat-form-field>
+      <mat-form-field appearance="fill">
+        <select
+          matNativeControl
+          matInput
+          (change)="onScanModeSelectChange($event.target.value)"
+        >
+          <option
+            *ngFor="let mode of availableScanMode"
+            [value]="mode.name"
+            [selected]="currentScanMode.name === mode.name"
+          >
+            {{ mode.name }}
+          </option>
+        </select>
+      </mat-form-field>
       <button mat-icon-button [matMenuTriggerFor]="appMenu">
         <mat-icon>more_vert</mat-icon>
       </button>
@@ -60,6 +74,14 @@
         <strong>{{ message | json }}</strong>
       </div>
       <button mat-icon-button (click)="clearMessage($event)">&times;</button>
+    </section>
+
+    <section class="error" *ngIf="error">
+      <div>
+        <small>Error</small>
+        <strong>{{ error }}</strong>
+      </div>
+      <button mat-icon-button (click)="clearError()">&times;</button>
     </section>
 
     <p>影片解析度=> 寬:{{ video.videoWidth }}/高:{{ video.videoHeight }}</p>

@@ -15,8 +15,8 @@ import {
   Result,
   ResultPoint,
 } from '@zxing/library';
-import { BehaviorSubject, fromEvent, Observable, Subject } from 'rxjs';
-import { debounceTime } from 'rxjs/operators';
+import { BehaviorSubject, fromEvent, Observable, of, Subject } from 'rxjs';
+import { catchError, debounceTime } from 'rxjs/operators';
 import { AppInfoDialogComponent } from '../app-info-dialog/app-info-dialog.component';
 import { getDeviceType } from '../deviceType';
 import { FormatsDialogComponent } from '../formats-dialog/formats-dialog.component';
@@ -28,15 +28,14 @@ import { FormatsDialogComponent } from '../formats-dialog/formats-dialog.compone
 })
 export class ZxingBrowserComponent implements OnInit, AfterViewInit {
   @ViewChild('video') video: ElementRef<HTMLVideoElement>;
-  @ViewChild('mainCanvas') mainCanvas: ElementRef<HTMLCanvasElement>;
-  @ViewChild('mainResult') mainResult: ElementRef<HTMLCanvasElement>;
+  @ViewChild('mainPointers') mainPointers: ElementRef<HTMLCanvasElement>;
   @ViewChild('snapshotCanvas') snapshotCanvas: ElementRef<HTMLCanvasElement>;
-  @ViewChild('snapshotResult') snapshotResult: ElementRef<HTMLCanvasElement>;
+  @ViewChild('snapshotPointers')
+  snapshotPointers: ElementRef<HTMLCanvasElement>;
   @ViewChild('scannerContainer') scannerContainer: ElementRef<HTMLDivElement>;
   @ViewChild('scannerArea') scannerArea: ElementRef<HTMLDivElement>;
   @ViewChild('snapshotContainer') snapshotContainer: ElementRef<HTMLDivElement>;
 
-  private _cropSetting = null;
   private _hints: Map<DecodeHintType, any> | null = new Map<
     DecodeHintType,
     any
@@ -50,6 +49,32 @@ export class ZxingBrowserComponent implements OnInit, AfterViewInit {
   windowResized$: Observable<Event>;
   userMedia$ = new Subject();
   codeReader: BrowserMultiFormatReader;
+
+  availableScanMode = [
+    { name: 'auto', width: '85.5%', height: '47.5%' },
+    { name: '1D', width: '85.5%', height: '20%' },
+    { name: '2D', width: '50%', height: '50%' },
+  ];
+  currentScanMode = this.availableScanMode[0];
+  formatsEnabled: BarcodeFormat[] = [
+    BarcodeFormat.CODE_128,
+    BarcodeFormat.DATA_MATRIX,
+    BarcodeFormat.EAN_13,
+    BarcodeFormat.QR_CODE,
+  ];
+
+  constrains: any = {
+    audio: false,
+    video: true,
+  };
+  stream = null;
+  hasDevices: boolean;
+  hasPermission: boolean;
+  result: any;
+  message: any;
+  error: any;
+  frameCount = 0;
+  scanPeriod = 60;
 
   get hints() {
     return this._hints;
@@ -86,47 +111,21 @@ export class ZxingBrowserComponent implements OnInit, AfterViewInit {
     this.hints = hints;
   }
 
-  set cropSetting(data) {
-    this._cropSetting = data;
-  }
-  cp = {};
-  get cropSetting() {
+  get cropData() {
     const { width, height, offsetWidth, offsetHeight } =
-      this.mainResult.nativeElement;
+      this.mainPointers.nativeElement;
     const widthRatio = offsetWidth / width;
     const heightRatio = offsetHeight / height;
-    const cropWidth =
-      this._cropSetting?.cropWidth ||
-      this.scannerArea.nativeElement.offsetWidth / widthRatio;
+    const cropWidth = this.scannerArea.nativeElement.offsetWidth / widthRatio;
     const cropHeight =
-      this._cropSetting?.cropHeight ||
       this.scannerArea.nativeElement.offsetHeight / heightRatio;
-    const color = this._cropSetting?.color || 'red';
-    const dash = this._cropSetting?.dash || [5, 10];
-    const lineWidth = this._cropSetting?.lineWidth || 3;
     const x0 = width / 2 - cropWidth / 2;
     const y0 = height / 2 - cropHeight / 2;
-    this.cp = {
-      x0,
-      y0,
-      cropWidth: cropWidth,
-      cropHeight: cropHeight,
-      originWidth: width,
-      originHeight: height,
-      originOffsetWidth: offsetWidth,
-      originOffsetHeight: offsetHeight,
-      color,
-      dash,
-      lineWidth,
-    };
     return {
       x0,
       y0,
-      width: cropWidth,
-      height: cropHeight,
-      color,
-      dash,
-      lineWidth,
+      cropWidth,
+      cropHeight,
     };
   }
 
@@ -144,37 +143,12 @@ export class ZxingBrowserComponent implements OnInit, AfterViewInit {
     };
   }
 
-  constrains: any = {
-    audio: false,
-    video: true,
-  };
-
-  stream = null;
-
-  formatsEnabled: BarcodeFormat[] = [
-    BarcodeFormat.CODE_128,
-    BarcodeFormat.DATA_MATRIX,
-    BarcodeFormat.EAN_13,
-    BarcodeFormat.QR_CODE,
-  ];
-
-  hasDevices: boolean;
-  hasPermission: boolean;
-
-  result: string;
-  message: any = '';
-  frameCount = 0;
-  scanPeriod = 60;
-
   constructor(private readonly _dialog: MatDialog) {}
 
   ngOnInit(): void {
     this.currentDevice$.subscribe(this.changeDevice.bind(this));
     this.userMedia$.subscribe(this.loadStream.bind(this));
     this.resultPoints$.subscribe(this.drawResult.bind(this));
-    window.addEventListener('orientationchange', (e: any) => {
-      console.log(e);
-    });
   }
 
   ngAfterViewInit(): void {
@@ -219,20 +193,21 @@ export class ZxingBrowserComponent implements OnInit, AfterViewInit {
         this.video.nativeElement.play();
         this.stream = stream;
       }
-
       await this.loadDevices();
     } catch (error) {
-      this.message = error;
+      this.error = error;
       console.log(error);
     }
   }
 
   loadCanvas() {
-    this.resizeWindow();
-    this.draw();
+    try {
+      this.resizeWindow();
+      this.draw();
+    } catch (error) {
+      this.error = error;
+    }
   }
-
-  resizeTimes = 0;
 
   resizeWindow() {
     this.resizeVideo();
@@ -240,50 +215,42 @@ export class ZxingBrowserComponent implements OnInit, AfterViewInit {
   }
 
   resizeVideo() {
-    try {
-      const { videoWidth, videoHeight } = this.video.nativeElement;
-      const { offsetWidth, offsetHeight } = document.body;
-      const videoRatio = videoHeight / videoWidth;
-      const currentRatio = offsetHeight / offsetWidth;
-      let maxWidth, maxHeight;
+    const { videoWidth, videoHeight } = this.video.nativeElement;
+    const { offsetWidth, offsetHeight } = document.body;
+    const videoRatio = videoHeight / videoWidth;
+    const currentRatio = offsetHeight / offsetWidth;
+    let maxWidth, maxHeight;
 
-      if (currentRatio > videoRatio) {
-        maxWidth = offsetWidth;
-        maxHeight = offsetWidth * videoRatio;
-      } else {
-        maxWidth = offsetHeight / videoRatio;
-        maxHeight = offsetHeight;
-      }
-
-      this.mainCanvas.nativeElement.width = videoWidth;
-      this.mainCanvas.nativeElement.height = videoHeight;
-      this.mainResult.nativeElement.width = videoWidth;
-      this.mainResult.nativeElement.height = videoHeight;
-      this.scannerContainer.nativeElement.style.maxWidth = `${maxWidth}px`;
-      this.scannerContainer.nativeElement.style.maxHeight = `${maxHeight}px`;
-      this.resizeTimes++;
-      // this.result = `${videoWidth},${videoHeight},${videoRatio}, ${currentRatio}`;
-    } catch (error) {
-      this.result = error;
+    if (currentRatio > videoRatio) {
+      maxWidth = offsetWidth;
+      maxHeight = offsetWidth * videoRatio;
+    } else {
+      maxWidth = offsetHeight / videoRatio;
+      maxHeight = offsetHeight;
     }
+
+    this.mainPointers.nativeElement.width = videoWidth;
+    this.mainPointers.nativeElement.height = videoHeight;
+    this.scannerContainer.nativeElement.style.maxWidth = `${maxWidth}px`;
+    this.scannerContainer.nativeElement.style.maxHeight = `${maxHeight}px`;
   }
 
   resizeSnapShot() {
-    const { width, height } = this.cropSetting;
+    const { cropWidth, cropHeight } = this.cropData;
+    const SNAPSHOT_RATIO = 0.3;
     const snapshotCanvas = this.snapshotCanvas.nativeElement;
-    const snapshotResult = this.snapshotResult.nativeElement;
+    const snapshotPointers = this.snapshotPointers.nativeElement;
     const snapshotContainer = this.snapshotContainer.nativeElement;
-    snapshotCanvas.width = width;
-    snapshotCanvas.height = height;
-    snapshotResult.width = width;
-    snapshotResult.height = height;
+    snapshotCanvas.width = cropWidth;
+    snapshotCanvas.height = cropHeight;
+    snapshotPointers.width = cropWidth;
+    snapshotPointers.height = cropHeight;
     snapshotContainer.style.width = `${
-      this.scannerArea.nativeElement.offsetWidth * 0.3
+      this.scannerArea.nativeElement.offsetWidth * SNAPSHOT_RATIO
     }px`;
     snapshotContainer.style.height = `${
-      this.scannerArea.nativeElement.offsetHeight * 0.3
+      this.scannerArea.nativeElement.offsetHeight * SNAPSHOT_RATIO
     }px`;
-    this.result = `${width},${height}`;
   }
 
   onDeviceSelectChange(selected: string) {
@@ -291,6 +258,13 @@ export class ZxingBrowserComponent implements OnInit, AfterViewInit {
       .getValue()
       .find((x) => x.deviceId === selected);
     this.currentDevice$.next(device);
+  }
+
+  onScanModeSelectChange(selected: string) {
+    const mode = this.availableScanMode.find((x) => x.name === selected);
+    this.scannerArea.nativeElement.style.width = mode.width;
+    this.scannerArea.nativeElement.style.height = mode.height;
+    this.resizeWindow();
   }
 
   stop() {
@@ -354,6 +328,10 @@ export class ZxingBrowserComponent implements OnInit, AfterViewInit {
     this.message = null;
   }
 
+  clearError(): void {
+    this.error = null;
+  }
+
   test = 0;
 
   draw() {
@@ -363,7 +341,7 @@ export class ZxingBrowserComponent implements OnInit, AfterViewInit {
     requestAnimationFrame(this.draw.bind(this));
 
     this.message = ++this.test;
-    // this.drawMiddleRect();
+    this.captureImage();
 
     if (++this.frameCount === this.scanPeriod) {
       this.frameCount = 0;
@@ -371,36 +349,23 @@ export class ZxingBrowserComponent implements OnInit, AfterViewInit {
       return;
     }
 
-    this.copyVideo();
-    this.captureImage();
     this.decodeImage();
   }
 
-  copyVideo() {
-    const ctx = this.mainCanvas.nativeElement.getContext('2d');
-    ctx.drawImage(this.video.nativeElement, 0, 0);
-  }
-
-  drawMiddleRect() {
-    let ctx = this.mainCanvas.nativeElement.getContext('2d');
-    const { dash, lineWidth, color, x0, y0, width, height } = this.cropSetting;
-
-    ctx.save();
-    ctx.setLineDash(dash);
-    ctx.lineWidth = lineWidth;
-    ctx.strokeStyle = color;
-
-    ctx.strokeRect(x0, y0, width, height);
-    ctx.restore();
-  }
-
   captureImage() {
-    const { x0, y0, width, height } = this.cropSetting;
-    const mainCtx = this.mainCanvas.nativeElement.getContext('2d');
-    const resultCtx = this.snapshotCanvas.nativeElement.getContext('2d');
-    let img = mainCtx.getImageData(x0, y0, width, height);
-    resultCtx.clearRect(0, 0, width, height);
-    resultCtx.putImageData(img, 0, 0);
+    const { x0, y0, cropWidth, cropHeight } = this.cropData;
+    const snapShotCtx = this.snapshotCanvas.nativeElement.getContext('2d');
+    snapShotCtx.drawImage(
+      this.video.nativeElement,
+      x0,
+      y0,
+      cropWidth,
+      cropHeight,
+      0,
+      0,
+      cropWidth,
+      cropHeight
+    );
   }
 
   decodeImage() {
@@ -420,9 +385,9 @@ export class ZxingBrowserComponent implements OnInit, AfterViewInit {
   drawResult(resultPoints: ResultPoint[]): void {
     if (resultPoints.length === 0) return;
 
-    const mainResult = this.mainResult.nativeElement;
-    const snapshotResult = this.snapshotResult.nativeElement;
-    const { x0, y0 } = this.cropSetting;
+    const mainResult = this.mainPointers.nativeElement;
+    const snapshotResult = this.snapshotPointers.nativeElement;
+    const { x0, y0 } = this.cropData;
 
     this.drawPoints(
       mainResult,
@@ -456,8 +421,8 @@ export class ZxingBrowserComponent implements OnInit, AfterViewInit {
   }
 
   clearPoints(): void {
-    const mainResult = this.mainResult.nativeElement;
-    const snapshotResult = this.snapshotResult.nativeElement;
+    const mainResult = this.mainPointers.nativeElement;
+    const snapshotResult = this.snapshotPointers.nativeElement;
 
     const pointersCtx = mainResult.getContext('2d');
     const resultCtx = snapshotResult.getContext('2d');
