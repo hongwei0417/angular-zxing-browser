@@ -63,13 +63,10 @@ export class ZxingBrowserComponent implements OnInit, AfterViewInit {
     BarcodeFormat.QR_CODE,
   ];
 
-  constrains: any = {
-    audio: false,
-    video: true,
-  };
   stream = null;
   hasDevices: boolean;
   hasPermission: boolean;
+  constrains: any;
   result: any;
   message: any;
   error: any;
@@ -138,14 +135,15 @@ export class ZxingBrowserComponent implements OnInit, AfterViewInit {
     //   };
     // }
     return {
-      width: 1280,
-      height: 720,
+      width: { min: 1024, ideal: 1280, max: 1920 },
+      height: { min: 576, ideal: 720, max: 1920 },
     };
   }
 
   constructor(private readonly _dialog: MatDialog) {}
 
   ngOnInit(): void {
+    this.constrains = { audio: false, video: true };
     this.currentDevice$.subscribe(this.changeDevice.bind(this));
     this.userMedia$.subscribe(this.loadStream.bind(this));
     this.resultPoints$.subscribe(this.drawResult.bind(this));
@@ -184,7 +182,6 @@ export class ZxingBrowserComponent implements OnInit, AfterViewInit {
   async loadStream() {
     try {
       this.stop();
-      this.message = this.constrains;
       const stream = await navigator.mediaDevices.getUserMedia(this.constrains);
       this.hasPermission = true;
 
@@ -272,6 +269,7 @@ export class ZxingBrowserComponent implements OnInit, AfterViewInit {
     this.stream.getTracks().forEach((track) => {
       track.stop();
     });
+    this.stream = null;
     this.video.nativeElement.srcObject = null;
   }
 

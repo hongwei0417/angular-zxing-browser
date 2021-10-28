@@ -1,6 +1,6 @@
 <div class="scanner-shell" [hidden]="!hasDevices">
   <div #scannerContainer class="scanner-container">
-    <video #video autoplay></video>
+    <video #video autoplay playsinline muted></video>
     <canvas #mainPointers id="mainPointers"></canvas>
     <div #scannerArea class="scanner-area"></div>
   </div>
@@ -91,5 +91,6 @@
         scannerArea.offsetHeight
       }}
     </p>
+    <!-- <p>{{ constrains | json }}</p> -->
   </div>
 </div>
