@@ -48,10 +48,10 @@
         >
           <option
             *ngFor="let mode of availableScanMode"
-            [value]="mode.name"
-            [selected]="currentScanMode.name === mode.name"
+            [value]="mode"
+            [selected]="currentScanMode === mode"
           >
-            {{ mode.name }}
+            {{ mode }}
           </option>
         </select>
       </mat-form-field>

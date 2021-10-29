@@ -40,7 +40,9 @@
   }
 
   .scanner-area {
-    border: 4px dashed yellow;
+    // border: 4px dashed yellow;
+    opacity: 0.2;
+    background-color: #64b5f6;
     position: absolute;
     left: 50%;
     top: 50%;

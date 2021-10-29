@@ -50,12 +50,6 @@ export class ZxingBrowserComponent implements OnInit, AfterViewInit {
   userMedia$ = new Subject();
   codeReader: BrowserMultiFormatReader;
 
-  availableScanMode = [
-    { name: 'auto', width: '85.5%', height: '47.5%' },
-    { name: '1D', width: '85.5%', height: '20%' },
-    { name: '2D', width: '50%', height: '50%' },
-  ];
-  currentScanMode = this.availableScanMode[0];
   formatsEnabled: BarcodeFormat[] = [
     BarcodeFormat.CODE_128,
     BarcodeFormat.DATA_MATRIX,
@@ -72,6 +66,9 @@ export class ZxingBrowserComponent implements OnInit, AfterViewInit {
   error: any;
   frameCount = 0;
   scanPeriod = 60;
+
+  availableScanMode = ['auto', '1D', '2D'];
+  currentScanMode = this.availableScanMode[0];
 
   get hints() {
     return this._hints;
@@ -258,9 +255,28 @@ export class ZxingBrowserComponent implements OnInit, AfterViewInit {
   }
 
   onScanModeSelectChange(selected: string) {
-    const mode = this.availableScanMode.find((x) => x.name === selected);
-    this.scannerArea.nativeElement.style.width = mode.width;
-    this.scannerArea.nativeElement.style.height = mode.height;
+    const getAspect = {
+      auto: () => {
+        return { width: '85.5%', height: '47.5%' };
+      },
+      '1D': () => {
+        return { width: '85.5%', height: '20%' };
+      },
+      '2D': () => {
+        const zoomRatio =
+          ((this.scannerContainer.nativeElement.offsetHeight * 0.5) /
+            this.scannerContainer.nativeElement.offsetWidth) *
+          100;
+        console.log(zoomRatio);
+        return {
+          width: `${zoomRatio}%`,
+          height: '50%',
+        };
+      },
+    };
+    const { width, height } = getAspect[selected]();
+    this.scannerArea.nativeElement.style.width = width;
+    this.scannerArea.nativeElement.style.height = height;
     this.resizeWindow();
   }
 
@@ -405,7 +421,7 @@ export class ZxingBrowserComponent implements OnInit, AfterViewInit {
     // set canvas
     const ctx = canvas.getContext('2d');
     ctx.clearRect(0, 0, canvas.width, canvas.height);
-    ctx.lineWidth = 2;
+    ctx.lineWidth = 4;
     ctx.strokeStyle = 'red';
 
     // draw points
