@@ -60,6 +60,14 @@
       </button>
     </header>
 
+    <div style="display: flex; width: 100%;">
+      <button class="thresholdBtn" style="height:3em;flex-grow:1;" (click)="offsetT(1)"> + </button>
+      <button class="thresholdBtn" style="height:3em;flex-grow:1;"(click)="offsetT(-1)"> - </button>
+    </div>
+
+    <!-- <input type="range" id="threshold" value="30" name="volume" min="0" max="256"> -->
+    {{t}}
+
     <section class="results" *ngIf="result">
       <div>
         <small>Result</small>

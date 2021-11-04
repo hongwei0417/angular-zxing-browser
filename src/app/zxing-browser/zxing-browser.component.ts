@@ -366,6 +366,11 @@ export class ZxingBrowserComponent implements OnInit, AfterViewInit {
     this.decodeImage();
   }
 
+  t = 30;
+  offsetT(v) {
+    this.t += v;
+  }
+
   captureImage() {
     const { x0, y0, cropWidth, cropHeight } = this.cropData;
     const snapShotCtx = this.snapshotCanvas.nativeElement.getContext('2d');
@@ -380,6 +385,55 @@ export class ZxingBrowserComponent implements OnInit, AfterViewInit {
       cropWidth,
       cropHeight
     );
+    let imageData = snapShotCtx.getImageData(0, 0, cropWidth, cropHeight);
+
+    imageData = invert(imageData);
+    imageData = gray(imageData);
+    imageData = threshold(imageData, this.t);
+
+    snapShotCtx.putImageData(imageData, 0, 0);
+
+    function invert(imageData) {
+      let data = imageData.data;
+      for(var i = 0; i < data.length; i += 4) {
+        // red
+        data[i] = 255 - data[i];
+        // green
+        data[i + 1] = 255 - data[i + 1];
+        // blue
+        data[i + 2] = 255 - data[i + 2];
+      }
+      return imageData;
+    }
+
+    function gray(imageData) {
+      let data = imageData.data;
+      for(var i = 0; i < data.length; i += 4) {
+        let grayVal = Math.floor((data[i] + data[i + 1], data[i + 2]) / 3);
+        // red
+        data[i] = grayVal;
+        // green
+        data[i + 1] = grayVal;
+        // blue
+        data[i + 2] = grayVal;
+      }
+      return imageData;
+    }
+
+    function threshold(imgData, thresholdVal) {
+      let data = imageData.data;
+      for(var i = 0; i < data.length; i += 4) {
+        let val = (data[i] >= thresholdVal) ? 255 : 0;
+        // red
+        data[i] = val;
+        // green
+        data[i + 1] = val;
+        // blue
+        data[i + 2] = val;
+      }
+      return imageData;
+    }
+
   }
 
   decodeImage() {
