@@ -21,6 +21,7 @@ import { AppInfoDialogComponent } from '../app-info-dialog/app-info-dialog.compo
 import { getDeviceType } from '../deviceType';
 import { FormatsDialogComponent } from '../formats-dialog/formats-dialog.component';
 
+declare var ZXing: any; // 這邊用 var
 @Component({
   selector: 'app-zxing-browser',
   templateUrl: './zxing-browser.component.html',
@@ -64,6 +65,7 @@ export class ZxingBrowserComponent implements OnInit, AfterViewInit {
   result: any;
   message: any;
   error: any;
+  ZXing: any;
   frameCount = 0;
   scanPeriod = 60;
 
@@ -387,15 +389,15 @@ export class ZxingBrowserComponent implements OnInit, AfterViewInit {
     );
     let imageData = snapShotCtx.getImageData(0, 0, cropWidth, cropHeight);
 
-    imageData = invert(imageData);
-    imageData = gray(imageData);
-    imageData = threshold(imageData, this.t);
+    // imageData = invert(imageData);
+    // imageData = gray(imageData);
+    // imageData = threshold(imageData, this.t);
 
-    snapShotCtx.putImageData(imageData, 0, 0);
+    // snapShotCtx.putImageData(imageData, 0, 0);
 
     function invert(imageData) {
       let data = imageData.data;
-      for(var i = 0; i < data.length; i += 4) {
+      for (var i = 0; i < data.length; i += 4) {
         // red
         data[i] = 255 - data[i];
         // green
@@ -408,7 +410,7 @@ export class ZxingBrowserComponent implements OnInit, AfterViewInit {
 
     function gray(imageData) {
       let data = imageData.data;
-      for(var i = 0; i < data.length; i += 4) {
+      for (var i = 0; i < data.length; i += 4) {
         let grayVal = Math.floor((data[i] + data[i + 1], data[i + 2]) / 3);
         // red
         data[i] = grayVal;
@@ -422,8 +424,8 @@ export class ZxingBrowserComponent implements OnInit, AfterViewInit {
 
     function threshold(imgData, thresholdVal) {
       let data = imageData.data;
-      for(var i = 0; i < data.length; i += 4) {
-        let val = (data[i] >= thresholdVal) ? 255 : 0;
+      for (var i = 0; i < data.length; i += 4) {
+        let val = data[i] >= thresholdVal ? 255 : 0;
         // red
         data[i] = val;
         // green
@@ -433,21 +435,41 @@ export class ZxingBrowserComponent implements OnInit, AfterViewInit {
       }
       return imageData;
     }
-
   }
 
   decodeImage() {
     try {
-      const result = this.codeReader.decodeFromCanvas(
-        this.snapshotCanvas.nativeElement
+      this.ZXing = ZXing();
+      const { x0, y0, cropWidth, cropHeight } = this.cropData;
+      const { width, height } = this.snapshotCanvas.nativeElement;
+      const snapShotCtx = this.snapshotCanvas.nativeElement.getContext('2d');
+      const decodePtr = this.ZXing.Runtime.addFunction(
+        this.decodeCallback.bind(this)
       );
-      this.result = result.getText();
-      this.resultPoints$.next(result.getResultPoints());
-      console.log(result);
+      const image = this.ZXing._resize(width, height);
+      const imageData = snapShotCtx.getImageData(0, 0, cropWidth, cropHeight);
+      const idd = imageData.data;
+
+      for (var i = 0, j = 0; i < idd.length; i += 4, j++) {
+        this.ZXing.HEAPU8[image + j] = idd[i];
+      }
+      const err = this.ZXing._decode_any(decodePtr);
+      console.log('error code', err);
+      // const result = this.codeReader.decodeFromCanvas(
+      //   this.snapshotCanvas.nativeElement
+      // );
+      // this.result = result.getText();
+      // this.resultPoints$.next(result.getResultPoints());
+      // console.log(result);
     } catch (error) {
-      console.log('Not Found Result');
+      console.log(error);
       this.clearPoints();
     }
+  }
+
+  decodeCallback(ptr, len, resultIndex, resultCount) {
+    var result = new Uint8Array(this.ZXing.HEAPU8.buffer, ptr, len);
+    this.result = String.fromCharCode.apply(null, result);
   }
 
   drawResult(resultPoints: ResultPoint[]): void {
