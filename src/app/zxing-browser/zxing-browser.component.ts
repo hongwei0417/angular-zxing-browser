@@ -20,7 +20,8 @@ import { catchError, debounceTime } from 'rxjs/operators';
 import { AppInfoDialogComponent } from '../app-info-dialog/app-info-dialog.component';
 import { getDeviceType } from '../deviceType';
 import { FormatsDialogComponent } from '../formats-dialog/formats-dialog.component';
-
+import interact from 'interactjs';
+import { MatSliderChange } from '@angular/material/slider';
 @Component({
   selector: 'app-zxing-browser',
   templateUrl: './zxing-browser.component.html',
@@ -45,8 +46,9 @@ export class ZxingBrowserComponent implements OnInit, AfterViewInit {
   availableDevices$ = new BehaviorSubject<MediaDeviceInfo[]>([]);
   resultPoints$ = new BehaviorSubject<ResultPoint[]>([]);
   videoLoaded$: Observable<Event>;
-  videoResized$: Observable<any>;
+  videoClick$: Observable<Event>;
   windowResized$: Observable<Event>;
+  videoResized$: Observable<Event>;
   userMedia$ = new Subject();
   codeReader: BrowserMultiFormatReader;
 
@@ -66,6 +68,8 @@ export class ZxingBrowserComponent implements OnInit, AfterViewInit {
   error: any;
   frameCount = 0;
   scanPeriod = 60;
+  zoomRatio = 1;
+  thresHoldValue = 30;
 
   availableScanMode = ['auto', '1D', '2D'];
   currentScanMode = this.availableScanMode[0];
@@ -110,9 +114,12 @@ export class ZxingBrowserComponent implements OnInit, AfterViewInit {
       this.mainPointers.nativeElement;
     const widthRatio = offsetWidth / width;
     const heightRatio = offsetHeight / height;
-    const cropWidth = this.scannerArea.nativeElement.offsetWidth / widthRatio;
+    const cropWidth =
+      this.scannerArea.nativeElement.offsetWidth / widthRatio / this.zoomRatio;
     const cropHeight =
-      this.scannerArea.nativeElement.offsetHeight / heightRatio;
+      this.scannerArea.nativeElement.offsetHeight /
+      heightRatio /
+      this.zoomRatio;
     const x0 = width / 2 - cropWidth / 2;
     const y0 = height / 2 - cropHeight / 2;
     return {
@@ -132,8 +139,8 @@ export class ZxingBrowserComponent implements OnInit, AfterViewInit {
     //   };
     // }
     return {
-      width: { min: 1024, ideal: 1280, max: 1920 },
-      height: { min: 576, ideal: 720, max: 1920 },
+      width: { min: 1024, ideal: 1920, max: 1920 },
+      height: { min: 576, ideal: 1080, max: 1920 },
     };
   }
 
@@ -150,12 +157,15 @@ export class ZxingBrowserComponent implements OnInit, AfterViewInit {
     this.videoLoaded$ = fromEvent(this.video.nativeElement, 'loadedmetadata');
     this.videoResized$ = fromEvent(this.video.nativeElement, 'resize');
     this.windowResized$ = fromEvent(window, 'resize');
+    this.videoClick$ = fromEvent(this.scannerContainer.nativeElement, 'click');
     this.initVideo();
     this.initAnalyzer();
+    this.initInteract();
   }
 
   initVideo() {
     this.videoLoaded$.subscribe(this.loadCanvas.bind(this));
+    this.videoClick$.subscribe(this.onVideoClick.bind(this));
     this.windowResized$.subscribe(this.resizeWindow.bind(this));
     this.videoResized$.subscribe(this.resizeWindow.bind(this));
     this.userMedia$.next();
@@ -245,6 +255,14 @@ export class ZxingBrowserComponent implements OnInit, AfterViewInit {
     snapshotContainer.style.height = `${
       this.scannerArea.nativeElement.offsetHeight * SNAPSHOT_RATIO
     }px`;
+  }
+
+  onVideoClick() {
+    if (this.video.nativeElement.paused) {
+      this.userMedia$.next();
+    } else {
+      this.video.nativeElement.pause();
+    }
   }
 
   onDeviceSelectChange(selected: string) {
@@ -377,9 +395,20 @@ export class ZxingBrowserComponent implements OnInit, AfterViewInit {
       cropHeight,
       0,
       0,
-      cropWidth,
-      cropHeight
+      cropWidth * this.zoomRatio,
+      cropHeight * this.zoomRatio
     );
+    const imageData = snapShotCtx.getImageData(
+      0,
+      0,
+      cropWidth * this.zoomRatio,
+      cropHeight * this.zoomRatio
+    );
+    this.grayscale(imageData.data);
+    // this.invertColors(imageData.data);
+    this.thresHold(imageData.data);
+
+    snapShotCtx.putImageData(imageData, 0, 0);
   }
 
   decodeImage() {
@@ -406,7 +435,10 @@ export class ZxingBrowserComponent implements OnInit, AfterViewInit {
     this.drawPoints(
       mainResult,
       resultPoints.map((p) => {
-        return { x: x0 + p.getX(), y: y0 + p.getY() };
+        return {
+          x: x0 + p.getX() / this.zoomRatio,
+          y: y0 + p.getY() / this.zoomRatio,
+        };
       })
     );
     this.drawPoints(
@@ -443,5 +475,111 @@ export class ZxingBrowserComponent implements OnInit, AfterViewInit {
 
     pointersCtx.clearRect(0, 0, mainResult.width, mainResult.height);
     resultCtx.clearRect(0, 0, snapshotResult.width, snapshotResult.height);
+  }
+
+  initInteract(): void {
+    interact('.snapshot-container')
+      .resizable({
+        // resize from all edges and corners
+        edges: { left: true, right: true, bottom: true, top: true },
+
+        listeners: {
+          move(event) {
+            var target = event.target;
+            var x = parseFloat(target.getAttribute('data-x')) || 0;
+            var y = parseFloat(target.getAttribute('data-y')) || 0;
+
+            // update the element's style
+            target.style.width = event.rect.width + 'px';
+            target.style.height = event.rect.height + 'px';
+
+            // translate when resizing from top or left edges
+            x += event.deltaRect.left;
+            y += event.deltaRect.top;
+
+            console.log(event);
+
+            target.style.transform = `translate(${x}px,${y}px)`;
+
+            target.setAttribute('data-x', x);
+            target.setAttribute('data-y', y);
+          },
+        },
+        modifiers: [
+          // keep the edges inside the parent
+          interact.modifiers.restrictEdges({
+            outer: 'parent',
+          }),
+          // minimum size
+          interact.modifiers.restrictSize({
+            min: { width: 100, height: 50 },
+          }),
+        ],
+
+        inertia: true,
+      })
+      .draggable({
+        listeners: { move: dragMoveListener },
+        inertia: true,
+        modifiers: [
+          interact.modifiers.restrictRect({
+            restriction: 'parent',
+            endOnly: true,
+          }),
+        ],
+      });
+
+    function dragMoveListener(event) {
+      var target = event.target;
+      // keep the dragged position in the data-x/data-y attributes
+      var x = (parseFloat(target.getAttribute('data-x')) || 0) + event.dx;
+      var y = (parseFloat(target.getAttribute('data-y')) || 0) + event.dy;
+
+      // translate the element
+      target.style.transform = 'translate(' + x + 'px, ' + y + 'px)';
+
+      // update the posiion attributes
+      target.setAttribute('data-x', x);
+      target.setAttribute('data-y', y);
+    }
+  }
+
+  onZoomChange(change: MatSliderChange): void {
+    this.video.nativeElement.style.transform = `scale(${change.value})`;
+    this.mainPointers.nativeElement.style.transform = `scale(${change.value})`;
+    this.zoomRatio = change.value;
+  }
+
+  onThresHoldChange(change: MatSliderChange): void {
+    this.thresHoldValue = change.value;
+  }
+
+  // 反轉
+  invertColors(data: Uint8ClampedArray): void {
+    for (var i = 0; i < data.length; i += 4) {
+      data[i] = 255 - data[i]; // red
+      data[i + 1] = 255 - data[i + 1]; // green
+      data[i + 2] = 255 - data[i + 2]; // blue
+    }
+  }
+
+  // 灰階
+  grayscale(data: Uint8ClampedArray): void {
+    for (var i = 0; i < data.length; i += 4) {
+      let avg = (data[i] + data[i + 1] + data[i + 2]) / 3;
+      data[i] = avg; // red
+      data[i + 1] = avg; // green
+      data[i + 2] = avg; // blue
+    }
+  }
+
+  // 臨界值
+  thresHold(data: Uint8ClampedArray): void {
+    for (var i = 0; i < data.length; i += 4) {
+      data[i] = data[i] > this.thresHoldValue ? 0 : data[i];
+      data[i + 1] = data[i + 1] > this.thresHoldValue ? 0 : data[i + 1];
+      data[i + 2] = data[i + 2] > this.thresHoldValue ? 0 : data[i] + 2;
+      // data[i + 3] = data[i + 3] > this.thresHoldValue ? 0 : data[i + 3];
+    }
   }
 }

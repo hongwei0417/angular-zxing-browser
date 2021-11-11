@@ -9,6 +9,7 @@ import { MatListModule } from '@angular/material/list';
 import { MatMenuModule } from '@angular/material/menu';
 import { MatSelectModule } from '@angular/material/select';
 import { MatTooltipModule } from '@angular/material/tooltip';
+import { MatSliderModule } from '@angular/material/slider';
 import { BrowserAnimationsModule } from '@angular/platform-browser/animations';
 
 const UI_MODULES = [
@@ -26,6 +27,7 @@ const UI_MODULES = [
   MatInputModule,
   MatMenuModule,
   MatIconModule,
+  MatSliderModule,
 ];
 
 @NgModule({ exports: UI_MODULES })

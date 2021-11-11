@@ -84,13 +84,40 @@
       <button mat-icon-button (click)="clearError()">&times;</button>
     </section>
 
-    <p>影片解析度=> 寬:{{ video.videoWidth }}/高:{{ video.videoHeight }}</p>
-    <p>畫面顯示大小=> 寬:{{ video.offsetWidth }}/高:{{ video.offsetHeight }}</p>
-    <p>
-      掃描範圍=> 寬:{{ scannerArea.offsetWidth }}/高:{{
-        scannerArea.offsetHeight
-      }}
-    </p>
-    <!-- <p>{{ constrains | json }}</p> -->
+    <div class="controlContainer">
+      <div>
+        <p>影片解析度=> 寬:{{ video.videoWidth }}/高:{{ video.videoHeight }}</p>
+        <p>
+          畫面顯示大小=> 寬:{{ video.offsetWidth }}/高:{{ video.offsetHeight }}
+        </p>
+        <p>
+          掃描範圍=> 寬:{{ scannerArea.offsetWidth }}/高:{{
+            scannerArea.offsetHeight
+          }}
+        </p>
+      </div>
+      <div style="display: flex">
+        <div class="sliderContainer">
+          <mat-slider
+            vertical
+            (input)="onZoomChange($event)"
+            min="1"
+            max="5"
+            step="0.1"
+          ></mat-slider>
+          <p>Z: {{ zoomRatio }}</p>
+        </div>
+        <div class="sliderContainer">
+          <mat-slider
+            vertical
+            (input)="onThresHoldChange($event)"
+            min="0"
+            max="255"
+            step="1"
+          ></mat-slider>
+          <p>T: {{ thresHoldValue }}</p>
+        </div>
+      </div>
+    </div>
   </div>
 </div>
