@@ -40,16 +40,16 @@
   }
 
   .scanner-area {
-    // border: 4px dashed yellow;
     opacity: 0.2;
     background-color: #64b5f6;
     position: absolute;
     left: 50%;
     top: 50%;
-    width: 85.5%;
-    height: 47.5%;
+    width: 300px;
+    height: 300px;
+    max-width: 90%;
+    max-height: 70%;
     transform: translate(-50%, -50%);
-    z-index: 10;
   }
 }
 
@@ -79,13 +79,24 @@ header {
   padding: 10px;
   background: #333;
   display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px 0;
 
   button {
     margin-left: 8px;
   }
 
+  button[mat-raised-button] {
+    display: flex;
+    justify-content: center;
+    align-items: center;
+    white-space: normal;
+  }
+
   mat-form-field {
-    width: 100%;
+    // width: 100%;
     font-weight: bold;
 
     ::ng-deep {
@@ -190,6 +201,7 @@ header {
 .controlContainer {
   display: flex;
   justify-content: space-between;
+  z-index: 3333;
 
   .sliderContainer {
     background-color: white;

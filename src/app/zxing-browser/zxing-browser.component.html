@@ -55,6 +55,41 @@
           </option>
         </select>
       </mat-form-field>
+      <button
+        mat-raised-button
+        color="primary"
+        (click)="onEnableImageFilter('grayScale')"
+      >
+        {{ enableGrayscale ? "Grayscale" : "No Grayscale" }}
+      </button>
+      <button
+        mat-raised-button
+        color="primary"
+        (click)="onEnableImageFilter('equalization')"
+      >
+        {{ enableEqualization ? "Equalization" : "No Equalization" }}
+      </button>
+      <button
+        mat-raised-button
+        color="primary"
+        (click)="onEnableImageFilter('invertColor')"
+      >
+        {{ enableInvertColor ? "Inverting" : "No Inverted" }}
+      </button>
+      <button
+        mat-raised-button
+        color="primary"
+        (click)="onEnableImageFilter('thresHold')"
+      >
+        {{ enableThreshold ? "Threshold" : "No Threshold" }}
+      </button>
+      <button
+        mat-raised-button
+        color="primary"
+        (click)="onEnableImageFilter('blur')"
+      >
+        {{ enableBlur ? "Blur" : "No Blur" }}
+      </button>
       <button mat-icon-button [matMenuTriggerFor]="appMenu">
         <mat-icon>more_vert</mat-icon>
       </button>
@@ -100,22 +135,35 @@
         <div class="sliderContainer">
           <mat-slider
             vertical
-            (input)="onZoomChange($event)"
-            min="1"
-            max="5"
-            step="0.1"
-          ></mat-slider>
-          <p>Z: {{ zoomRatio }}</p>
-        </div>
-        <div class="sliderContainer">
-          <mat-slider
-            vertical
             (input)="onThresHoldChange($event)"
+            [value]="thresHoldValue"
             min="0"
             max="255"
             step="1"
           ></mat-slider>
           <p>T: {{ thresHoldValue }}</p>
+        </div>
+        <div class="sliderContainer">
+          <mat-slider
+            vertical
+            (input)="onBlurChange($event)"
+            [value]="blurValue"
+            min="1"
+            max="20"
+            step="0"
+          ></mat-slider>
+          <p>B: {{ blurValue }}</p>
+        </div>
+        <div class="sliderContainer">
+          <mat-slider
+            vertical
+            (input)="onZoomChange($event)"
+            [value]="zoomRatio"
+            min="1"
+            max="5"
+            step="0.1"
+          ></mat-slider>
+          <p>Z: {{ zoomRatio }}</p>
         </div>
       </div>
     </div>

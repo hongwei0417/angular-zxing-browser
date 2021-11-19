@@ -51,6 +51,7 @@ export class ZxingBrowserComponent implements OnInit, AfterViewInit {
   videoResized$: Observable<Event>;
   userMedia$ = new Subject();
   codeReader: BrowserMultiFormatReader;
+  active = false;
 
   formatsEnabled: BarcodeFormat[] = [
     BarcodeFormat.CODE_128,
@@ -66,10 +67,17 @@ export class ZxingBrowserComponent implements OnInit, AfterViewInit {
   result: any;
   message: any;
   error: any;
+  zoomRatio = 1;
   frameCount = 0;
   scanPeriod = 60;
-  zoomRatio = 1;
-  thresHoldValue = 30;
+  thresHoldValue = 0;
+  blurValue = 10;
+
+  enableGrayscale = true;
+  enableEqualization = true;
+  enableInvertColor = true;
+  enableThreshold = true;
+  enableBlur = true;
 
   availableScanMode = ['auto', '1D', '2D'];
   currentScanMode = this.availableScanMode[0];
@@ -131,13 +139,6 @@ export class ZxingBrowserComponent implements OnInit, AfterViewInit {
   }
 
   get videoResolution() {
-    // const deviceType = getDeviceType();
-    // if (deviceType === DeviceType.TABLET || deviceType === DeviceType.MOBILE) {
-    //   return {
-    //     width: 720,
-    //     height: 1280,
-    //   };
-    // }
     return {
       width: { min: 1024, ideal: 1920, max: 1920 },
       height: { min: 576, ideal: 1080, max: 1920 },
@@ -164,6 +165,7 @@ export class ZxingBrowserComponent implements OnInit, AfterViewInit {
   }
 
   initVideo() {
+    this.setScannerArea('auto');
     this.videoLoaded$.subscribe(this.loadCanvas.bind(this));
     this.videoClick$.subscribe(this.onVideoClick.bind(this));
     this.windowResized$.subscribe(this.resizeWindow.bind(this));
@@ -196,6 +198,7 @@ export class ZxingBrowserComponent implements OnInit, AfterViewInit {
         this.video.nativeElement.srcObject = stream;
         this.video.nativeElement.play();
         this.stream = stream;
+        this.active = true;
       }
       await this.loadDevices();
     } catch (error) {
@@ -214,6 +217,7 @@ export class ZxingBrowserComponent implements OnInit, AfterViewInit {
   }
 
   resizeWindow() {
+    this.resetSetting();
     this.resizeVideo();
     this.resizeSnapShot();
   }
@@ -257,9 +261,15 @@ export class ZxingBrowserComponent implements OnInit, AfterViewInit {
     }px`;
   }
 
+  resetSetting() {
+    this.zoomRatio = 1;
+    this.video.nativeElement.style.transform = `scale(1)`;
+    this.mainPointers.nativeElement.style.transform = `scale(1)`;
+  }
+
   onVideoClick() {
     if (this.video.nativeElement.paused) {
-      this.userMedia$.next();
+      this.video.nativeElement.play();
     } else {
       this.video.nativeElement.pause();
     }
@@ -272,29 +282,25 @@ export class ZxingBrowserComponent implements OnInit, AfterViewInit {
     this.currentDevice$.next(device);
   }
 
-  onScanModeSelectChange(selected: string) {
+  setScannerArea(mode: string) {
     const getAspect = {
       auto: () => {
-        return { width: '85.5%', height: '47.5%' };
+        return { width: '300px', height: '300px' };
       },
       '1D': () => {
-        return { width: '85.5%', height: '20%' };
+        return { width: '800px', height: '200px' };
       },
       '2D': () => {
-        const zoomRatio =
-          ((this.scannerContainer.nativeElement.offsetHeight * 0.5) /
-            this.scannerContainer.nativeElement.offsetWidth) *
-          100;
-        console.log(zoomRatio);
-        return {
-          width: `${zoomRatio}%`,
-          height: '50%',
-        };
+        return { width: '500px', height: '500px' };
       },
     };
-    const { width, height } = getAspect[selected]();
+    const { width, height } = getAspect[mode]();
     this.scannerArea.nativeElement.style.width = width;
     this.scannerArea.nativeElement.style.height = height;
+  }
+
+  onScanModeSelectChange(selected: string) {
+    this.setScannerArea(selected);
     this.resizeWindow();
   }
 
@@ -305,6 +311,7 @@ export class ZxingBrowserComponent implements OnInit, AfterViewInit {
     });
     this.stream = null;
     this.video.nativeElement.srcObject = null;
+    this.active = false;
   }
 
   changeDevice(device: MediaDeviceInfo) {
@@ -352,6 +359,27 @@ export class ZxingBrowserComponent implements OnInit, AfterViewInit {
     this._dialog.open(AppInfoDialogComponent, { data });
   }
 
+  onEnableImageFilter(type: string) {
+    const action = {
+      grayScale: () => {
+        this.enableGrayscale = !this.enableGrayscale;
+      },
+      equalization: () => {
+        this.enableEqualization = !this.enableEqualization;
+      },
+      invertColor: () => {
+        this.enableInvertColor = !this.enableInvertColor;
+      },
+      thresHold: () => {
+        this.enableThreshold = !this.enableThreshold;
+      },
+      blur: () => {
+        this.enableBlur = !this.enableBlur;
+      },
+    };
+    action[type]();
+  }
+
   clearResult(): void {
     this.result = null;
   }
@@ -367,8 +395,7 @@ export class ZxingBrowserComponent implements OnInit, AfterViewInit {
   test = 0;
 
   draw() {
-    if (this.video.nativeElement.paused || this.video.nativeElement.ended)
-      return;
+    if (!this.active) return;
 
     requestAnimationFrame(this.draw.bind(this));
 
@@ -404,8 +431,17 @@ export class ZxingBrowserComponent implements OnInit, AfterViewInit {
       cropWidth * this.zoomRatio,
       cropHeight * this.zoomRatio
     );
-    this.grayscale(imageData.data);
-    // this.invertColors(imageData.data);
+
+    snapShotCtx.imageSmoothingEnabled = false;
+
+    // image filter
+    if (this.enableGrayscale) this.grayscale(imageData.data);
+    if (this.enableEqualization) this.equalization(imageData.data);
+    if (this.enableInvertColor) this.invertColors(imageData.data);
+    if (this.enableBlur) this.blur(imageData, this.blurValue, 1);
+    if (this.enableThreshold) {
+      this.OTSU(imageData.data, imageData.width * imageData.height);
+    }
     this.thresHold(imageData.data);
 
     snapShotCtx.putImageData(imageData, 0, 0);
@@ -497,8 +533,6 @@ export class ZxingBrowserComponent implements OnInit, AfterViewInit {
             x += event.deltaRect.left;
             y += event.deltaRect.top;
 
-            console.log(event);
-
             target.style.transform = `translate(${x}px,${y}px)`;
 
             target.setAttribute('data-x', x);
@@ -554,7 +588,11 @@ export class ZxingBrowserComponent implements OnInit, AfterViewInit {
     this.thresHoldValue = change.value;
   }
 
-  // 反轉
+  onBlurChange(change: MatSliderChange): void {
+    this.blurValue = change.value;
+  }
+
+  // * 反轉
   invertColors(data: Uint8ClampedArray): void {
     for (var i = 0; i < data.length; i += 4) {
       data[i] = 255 - data[i]; // red
@@ -563,7 +601,7 @@ export class ZxingBrowserComponent implements OnInit, AfterViewInit {
     }
   }
 
-  // 灰階
+  // * 灰階
   grayscale(data: Uint8ClampedArray): void {
     for (var i = 0; i < data.length; i += 4) {
       let avg = (data[i] + data[i + 1] + data[i + 2]) / 3;
@@ -573,13 +611,213 @@ export class ZxingBrowserComponent implements OnInit, AfterViewInit {
     }
   }
 
-  // 臨界值
-  thresHold(data: Uint8ClampedArray): void {
+  // * 直方圖均衡化(Histogram Equalization)
+  equalization(data: Uint8ClampedArray) {
+    let histogram = new Array<number>(255); //每個灰度值出現次數(灰階直方圖)
+    let CDF = new Array<number>(255); //累積分布函數
+
+    //初始化
+    for (let i = 0; i < 256; i++) {
+      histogram[i] = 0;
+      CDF[i] = 0;
+    }
+
+    //統計圖像灰度分布(灰階值方圖)
+    for (let i = 0; i < data.length; i += 4) {
+      // 灰階圖像r=g=b，取其中一個就好
+      let r = data[i];
+      histogram[r]++;
+    }
+
+    //計算累積分布函數
+    for (let i = 0; i < 256; i++) {
+      CDF[i] = i > 0 ? histogram[i] + CDF[i - 1] : histogram[i];
+    }
+
+    //均勻化
+    for (let i = 0; i < data.length; i += 4) {
+      let value = Math.round((CDF[data[i]] / CDF[255]) * 255);
+      data[i] = value; // red
+      data[i + 1] = value; // green
+      data[i + 2] = value; // blue
+    }
+    // console.log(histogram);
+  }
+
+  // * 閾值(兩極)
+  thresHold(data: Uint8ClampedArray) {
     for (var i = 0; i < data.length; i += 4) {
-      data[i] = data[i] > this.thresHoldValue ? 0 : data[i];
-      data[i + 1] = data[i + 1] > this.thresHoldValue ? 0 : data[i + 1];
-      data[i + 2] = data[i + 2] > this.thresHoldValue ? 0 : data[i] + 2;
+      let r = data[i];
+      let g = data[i + 1];
+      let b = data[i + 2];
+      let value =
+        0.2126 * r + 0.7152 * g + 0.0722 * b >= this.thresHoldValue ? 255 : 0;
+      data[i] = data[i + 1] = data[i + 2] = value;
+      // data[i] = data[i] > this.thresHoldValue ? 0 : data[i];
+      // data[i + 2] = data[i + 2] > this.thresHoldValue ? 0 : data[i] + 2;
+      // data[i + 1] = data[i + 1] > this.thresHoldValue ? 0 : data[i + 1];
       // data[i + 3] = data[i + 3] > this.thresHoldValue ? 0 : data[i + 3];
+    }
+  }
+
+  // * 一維OTSU(大津演算法)
+  OTSU(data: Uint8ClampedArray, size: number) {
+    let histogram = new Array<number>(255); //每個灰度值出現次數(灰階直方圖)
+    let pHistogram = new Array<number>(255); //每個灰度值出現比例(機率)
+    let sumPHistogram = new Array<number>(255); //每個灰度比例之和
+    let wHistogram = new Array<number>(255); //每個灰度的比例*權重
+    let sumWHistogram = new Array<number>(255); //每個灰度的比例*權重之和
+    let temp = 0; //臨時變量
+    let sigma2Max = 0; //最大類間方差(變異數差)
+    let threshold = 0; //最好閾值
+
+    //初始化
+    for (let i = 0; i < 256; i++) {
+      histogram[i] = 0;
+      pHistogram[i] = 0;
+      sumPHistogram[i] = 0;
+      wHistogram[i] = 0;
+    }
+
+    //統計圖像灰度分布(灰階值方圖)
+    for (let i = 0; i < data.length; i += 4) {
+      // 灰階圖像r=g=b，取其中一個就好
+      let r = data[i];
+      histogram[r]++;
+    }
+
+    //計算每個灰度機率、灰度比例、灰度權重
+    for (let i = 0; i < 256; i++) {
+      pHistogram[i] = histogram[i] / size;
+      wHistogram[i] = i * pHistogram[i];
+
+      sumPHistogram[i] =
+        i > 0 ? pHistogram[i] + sumPHistogram[i - 1] : pHistogram[i];
+      sumWHistogram[i] =
+        i > 0 ? wHistogram[i] + sumWHistogram[i - 1] : wHistogram[i];
+    }
+
+    //將區塊分為A、B區域，並從0~255中分別計算OSTU值並找出最大值作為分割閾值
+    for (let i = 0; i < 256; i++) {
+      let pA = sumPHistogram[i]; //A區塊機率和
+      let pB = 1 - pA; //B區塊機率和
+      let wpA = sumWHistogram[i]; //A區塊機率權重和
+      let wpB = sumWHistogram[255] - wpA; //B區塊機率權重和
+      let uA = wpA / pA; //A區塊平均灰度值
+      let uB = wpB / pB; //B區塊平均灰度值
+
+      //計算類間變異數差(OSTU)
+      temp = pA * pB * Math.pow(uA - uB, 2); //類間方差公式
+      if (temp > sigma2Max) {
+        sigma2Max = temp;
+        threshold = i;
+      }
+    }
+    this.thresHoldValue = threshold;
+  }
+
+  // * 模糊
+  blur(imageData: ImageData, radius = 10, quality = 1) {
+    var pixels = imageData.data;
+    var width = imageData.width;
+    var height = imageData.height;
+
+    var rsum, gsum, bsum, asum, x, y, i, p, p1, p2, yp, yi, yw;
+    var wm = width - 1;
+    var hm = height - 1;
+    var rad1x = radius + 1;
+    var divx = radius + rad1x;
+    var rad1y = radius + 1;
+    var divy = radius + rad1y;
+    var div2 = 1 / (divx * divy);
+
+    var r = [];
+    var g = [];
+    var b = [];
+    var a = [];
+
+    var vmin = [];
+    var vmax = [];
+
+    while (quality-- > 0) {
+      yw = yi = 0;
+
+      for (y = 0; y < height; y++) {
+        rsum = pixels[yw] * rad1x;
+        gsum = pixels[yw + 1] * rad1x;
+        bsum = pixels[yw + 2] * rad1x;
+        asum = pixels[yw + 3] * rad1x;
+
+        for (i = 1; i <= radius; i++) {
+          p = yw + ((i > wm ? wm : i) << 2);
+          rsum += pixels[p++];
+          gsum += pixels[p++];
+          bsum += pixels[p++];
+          asum += pixels[p];
+        }
+
+        for (x = 0; x < width; x++) {
+          r[yi] = rsum;
+          g[yi] = gsum;
+          b[yi] = bsum;
+          a[yi] = asum;
+
+          if (y == 0) {
+            vmin[x] = Math.min(x + rad1x, wm) << 2;
+            vmax[x] = Math.max(x - radius, 0) << 2;
+          }
+
+          p1 = yw + vmin[x];
+          p2 = yw + vmax[x];
+
+          rsum += pixels[p1++] - pixels[p2++];
+          gsum += pixels[p1++] - pixels[p2++];
+          bsum += pixels[p1++] - pixels[p2++];
+          asum += pixels[p1] - pixels[p2];
+
+          yi++;
+        }
+        yw += width << 2;
+      }
+
+      for (x = 0; x < width; x++) {
+        yp = x;
+        rsum = r[yp] * rad1y;
+        gsum = g[yp] * rad1y;
+        bsum = b[yp] * rad1y;
+        asum = a[yp] * rad1y;
+
+        for (i = 1; i <= radius; i++) {
+          yp += i > hm ? 0 : width;
+          rsum += r[yp];
+          gsum += g[yp];
+          bsum += b[yp];
+          asum += a[yp];
+        }
+
+        yi = x << 2;
+        for (y = 0; y < height; y++) {
+          pixels[yi] = (rsum * div2 + 0.5) | 0;
+          pixels[yi + 1] = (gsum * div2 + 0.5) | 0;
+          pixels[yi + 2] = (bsum * div2 + 0.5) | 0;
+          pixels[yi + 3] = (asum * div2 + 0.5) | 0;
+
+          if (x == 0) {
+            vmin[y] = Math.min(y + rad1y, hm) * width;
+            vmax[y] = Math.max(y - radius, 0) * width;
+          }
+
+          p1 = x + vmin[y];
+          p2 = x + vmax[y];
+
+          rsum += r[p1] - r[p2];
+          gsum += g[p1] - g[p2];
+          bsum += b[p1] - b[p2];
+          asum += a[p1] - a[p2];
+
+          yi += width << 2;
+        }
+      }
     }
   }
 }

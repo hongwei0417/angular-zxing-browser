@@ -8,7 +8,7 @@
     "test": "ng test",
     "lint": "ng lint",
     "e2e": "ng e2e",
-    "gh-page": "ng build --prod --base-href=https://hongwei0417.github.io/angular-zxing-browser/",
+    "gh-page": "ng build --prod --base-href=https://hongwei0417.github.io/angular-zxing-browser/ & npm run deploy",
     "deploy": "npx ngh --dir=dist/angular-zxing-browser --no-silent"
   },
   "private": true,
