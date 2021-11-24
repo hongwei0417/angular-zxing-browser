@@ -6,8 +6,14 @@
   </div>
 
   <div #snapshotContainer class="snapshot-container">
+    <img
+      #dataMatrixTemplateImage
+      src="assets/datamatrix_border300.jpg"
+      alt="template"
+    />
     <canvas #snapshotCanvas id="snapshotCanvas"></canvas>
     <canvas #snapshotPointers id="snapshotPointers"></canvas>
+    <canvas #barcodeCanvas id="barcodeCanvas"></canvas>
   </div>
 
   <div class="options">

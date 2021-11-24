@@ -11,6 +11,14 @@ import { FormatsDialogComponent } from './formats-dialog/formats-dialog.componen
 import { ZXingScannerModule } from '@zxing/ngx-scanner';
 import { NgxScannerComponent } from './ngx-scanner/ngx-scanner.component';
 import { AppRoutingModule } from './app-routing.module';
+import { NgOpenCVModule } from 'ng-open-cv';
+import { OpenCVOptions } from 'ng-open-cv/public_api';
+
+const openCVConfig: OpenCVOptions = {
+  scriptUrl: `assets/opencv/opencv.js`,
+  wasmBinaryFile: 'wasm/opencv_js.wasm',
+  usingWasm: true,
+};
 
 @NgModule({
   imports: [
@@ -19,6 +27,7 @@ import { AppRoutingModule } from './app-routing.module';
     UiModule,
     ZXingScannerModule,
     AppRoutingModule,
+    NgOpenCVModule.forRoot(openCVConfig),
   ],
   declarations: [
     AppComponent,

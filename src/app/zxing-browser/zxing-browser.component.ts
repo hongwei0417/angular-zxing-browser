@@ -12,16 +12,26 @@ import {
   BarcodeFormat,
   BinaryBitmap,
   DecodeHintType,
+  HybridBinarizer,
   Result,
   ResultPoint,
+  RGBLuminanceSource,
 } from '@zxing/library';
 import { BehaviorSubject, fromEvent, Observable, of, Subject } from 'rxjs';
-import { catchError, debounceTime } from 'rxjs/operators';
+import {
+  catchError,
+  debounceTime,
+  filter,
+  switchMap,
+  tap,
+} from 'rxjs/operators';
 import { AppInfoDialogComponent } from '../app-info-dialog/app-info-dialog.component';
 import { getDeviceType } from '../deviceType';
 import { FormatsDialogComponent } from '../formats-dialog/formats-dialog.component';
 import interact from 'interactjs';
 import { MatSliderChange } from '@angular/material/slider';
+import { NgOpenCVService, OpenCVLoadResult } from 'ng-open-cv';
+
 @Component({
   selector: 'app-zxing-browser',
   templateUrl: './zxing-browser.component.html',
@@ -31,11 +41,14 @@ export class ZxingBrowserComponent implements OnInit, AfterViewInit {
   @ViewChild('video') video: ElementRef<HTMLVideoElement>;
   @ViewChild('mainPointers') mainPointers: ElementRef<HTMLCanvasElement>;
   @ViewChild('snapshotCanvas') snapshotCanvas: ElementRef<HTMLCanvasElement>;
+  @ViewChild('barcodeCanvas') barcodeCanvas: ElementRef<HTMLCanvasElement>;
   @ViewChild('snapshotPointers')
   snapshotPointers: ElementRef<HTMLCanvasElement>;
   @ViewChild('scannerContainer') scannerContainer: ElementRef<HTMLDivElement>;
   @ViewChild('scannerArea') scannerArea: ElementRef<HTMLDivElement>;
   @ViewChild('snapshotContainer') snapshotContainer: ElementRef<HTMLDivElement>;
+  @ViewChild('dataMatrixTemplateImage')
+  dataMatrixTemplateImage: ElementRef<HTMLImageElement>;
 
   private _hints: Map<DecodeHintType, any> | null = new Map<
     DecodeHintType,
@@ -74,10 +87,10 @@ export class ZxingBrowserComponent implements OnInit, AfterViewInit {
   blurValue = 10;
 
   enableGrayscale = true;
-  enableEqualization = true;
+  enableEqualization = false;
   enableInvertColor = true;
   enableThreshold = true;
-  enableBlur = true;
+  enableBlur = false;
 
   availableScanMode = ['auto', '1D', '2D'];
   currentScanMode = this.availableScanMode[0];
@@ -145,9 +158,16 @@ export class ZxingBrowserComponent implements OnInit, AfterViewInit {
     };
   }
 
-  constructor(private readonly _dialog: MatDialog) {}
+  constructor(
+    private readonly _dialog: MatDialog,
+    private ngOpenCVService: NgOpenCVService
+  ) {}
 
   ngOnInit(): void {
+    this.ngOpenCVService.isReady$
+      .pipe(filter((result: OpenCVLoadResult) => result.ready))
+      .subscribe(() => console.log(cv));
+
     this.constrains = { audio: false, video: true };
     this.currentDevice$.subscribe(this.changeDevice.bind(this));
     this.userMedia$.subscribe(this.loadStream.bind(this));
@@ -425,6 +445,30 @@ export class ZxingBrowserComponent implements OnInit, AfterViewInit {
       cropWidth * this.zoomRatio,
       cropHeight * this.zoomRatio
     );
+
+    this.openCVImageFilter();
+    // this.nativeImageFilter();
+  }
+
+  openCVImageFilter() {
+    try {
+      // for (let i = 1; i <= 3; i++) {
+      //   const image = this.dataMatrixTemplateImage.nativeElement;
+      //   image.style.width = `${100 * i}px`;
+      //   image.style.height = `${100 * i}px`;
+      //   this.matchOneTemplate();
+      // }
+      // this.matchMultipleTemplate();
+      this.contours();
+    } catch (error) {
+      console.error(error);
+      this.stop();
+    }
+  }
+
+  nativeImageFilter() {
+    const { x0, y0, cropWidth, cropHeight } = this.cropData;
+    const snapShotCtx = this.snapshotCanvas.nativeElement.getContext('2d');
     const imageData = snapShotCtx.getImageData(
       0,
       0,
@@ -432,9 +476,6 @@ export class ZxingBrowserComponent implements OnInit, AfterViewInit {
       cropHeight * this.zoomRatio
     );
 
-    snapShotCtx.imageSmoothingEnabled = false;
-
-    // image filter
     if (this.enableGrayscale) this.grayscale(imageData.data);
     if (this.enableEqualization) this.equalization(imageData.data);
     if (this.enableInvertColor) this.invertColors(imageData.data);
@@ -443,14 +484,13 @@ export class ZxingBrowserComponent implements OnInit, AfterViewInit {
       this.OTSU(imageData.data, imageData.width * imageData.height);
     }
     this.thresHold(imageData.data);
-
     snapShotCtx.putImageData(imageData, 0, 0);
   }
 
   decodeImage() {
     try {
       const result = this.codeReader.decodeFromCanvas(
-        this.snapshotCanvas.nativeElement
+        this.barcodeCanvas.nativeElement
       );
       this.result = result.getText();
       this.resultPoints$.next(result.getResultPoints());
@@ -604,7 +644,16 @@ export class ZxingBrowserComponent implements OnInit, AfterViewInit {
   // * 灰階
   grayscale(data: Uint8ClampedArray): void {
     for (var i = 0; i < data.length; i += 4) {
-      let avg = (data[i] + data[i + 1] + data[i + 2]) / 3;
+      let avg =
+        data[i] ^
+        (2.2 * 0.2973 + data[i + 1]) ^
+        (2.2 * 0.6274 + data[i + 2]) ^
+        (2.2 * 0.0753) ^
+        (1 / 2.2); // ? adobe PS algo
+      // let avg = data[i] * 0.2126 + data[i + 1] * 0.7152 + data[i + 2] * 0.0722;
+      // avg = avg <= 0.0031308 ? 12.92 * avg : (avg ^ (1 / 2.4)) * 1.055 - 0.055;
+      avg = (data[i] + data[i + 1] + data[i + 2]) / 3;
+
       data[i] = avg; // red
       data[i + 1] = avg; // green
       data[i + 2] = avg; // blue
@@ -650,8 +699,7 @@ export class ZxingBrowserComponent implements OnInit, AfterViewInit {
       let r = data[i];
       let g = data[i + 1];
       let b = data[i + 2];
-      let value =
-        0.2126 * r + 0.7152 * g + 0.0722 * b >= this.thresHoldValue ? 255 : 0;
+      let value = r <= this.thresHoldValue ? 0 : 255;
       data[i] = data[i + 1] = data[i + 2] = value;
       // data[i] = data[i] > this.thresHoldValue ? 0 : data[i];
       // data[i + 2] = data[i + 2] > this.thresHoldValue ? 0 : data[i] + 2;
@@ -819,5 +867,244 @@ export class ZxingBrowserComponent implements OnInit, AfterViewInit {
         }
       }
     }
+  }
+
+  // * opencv match one template
+  matchOneTemplate() {
+    let src = cv.imread(this.snapshotCanvas.nativeElement);
+    let src2 = cv.imread(this.snapshotCanvas.nativeElement);
+    let dst = cv.Mat.zeros(src.rows, src.cols, cv.CV_8UC3);
+    let template = cv.imread(this.dataMatrixTemplateImage.nativeElement);
+    let M = new cv.Mat();
+
+    // * 灰階
+    cv.cvtColor(src, src, cv.COLOR_RGBA2GRAY, 0);
+    cv.cvtColor(template, template, cv.COLOR_RGBA2GRAY, 0);
+    // * 閾值
+    cv.threshold(
+      src,
+      src,
+      this.thresHoldValue,
+      255,
+      this.enableInvertColor ? cv.THRESH_BINARY_INV : cv.THRESH_BINARY
+    );
+
+    // * 形態學
+    M = cv.getStructuringElement(cv.MORPH_RECT, new cv.Size(3, 3));
+    cv.morphologyEx(src, src, cv.MORPH_OPEN, M);
+    M = cv.getStructuringElement(cv.MORPH_RECT, new cv.Size(5, 5));
+    cv.morphologyEx(src, src, cv.MORPH_CLOSE, M);
+
+    // * 樣板配對
+    let mask = new cv.Mat();
+    cv.matchTemplate(src, template, dst, cv.TM_CCOEFF, mask);
+    let result = cv.minMaxLoc(dst, mask);
+    let maxPoint = result.maxLoc;
+    let color = new cv.Scalar(255, 0, 0, 255);
+
+    let point = new cv.Point(
+      maxPoint.x + template.cols,
+      maxPoint.y + template.rows
+    );
+    cv.rectangle(src2, maxPoint, point, color, 2, cv.LINE_8, 0);
+
+    // * 擷取barcode
+    let rect = new cv.Rect(
+      maxPoint.x,
+      maxPoint.y,
+      template.cols,
+      template.rows
+    );
+
+    console.log(result);
+    let area = src.roi(rect);
+    let copyArea = area.clone();
+    cv.copyMakeBorder(
+      copyArea,
+      copyArea,
+      20,
+      20,
+      20,
+      20,
+      cv.BORDER_CONSTANT,
+      new cv.Scalar(255, 255, 255, 255)
+    );
+
+    // * 顯示
+    cv.imshow(this.snapshotCanvas.nativeElement, src2);
+    cv.imshow(this.barcodeCanvas.nativeElement, copyArea);
+
+    // * 釋放
+    src.delete();
+    src2.delete();
+    dst.delete();
+    M.delete();
+    template.delete();
+    mask.delete();
+    area.delete();
+    copyArea.delete();
+  }
+
+  // * opencv match multiple template
+  matchMultipleTemplate() {
+    let src = cv.imread(this.snapshotCanvas.nativeElement);
+    let templ = cv.imread(this.dataMatrixTemplateImage.nativeElement);
+    let dst = new cv.Mat();
+    let mask = new cv.Mat();
+
+    cv.matchTemplate(src, templ, dst, cv.TM_CCOEFF_NORMED, mask);
+
+    let color = new cv.Scalar(255, 0, 0, 255);
+
+    var newDst = [];
+    var start = 0;
+    var end = dst.cols;
+
+    var cnt = 0;
+    outter: for (var i = 0; i < dst.rows; i++) {
+      newDst[i] = [];
+      for (var k = 0; k < dst.cols; k++) {
+        newDst[i][k] = dst.data32F[start];
+
+        if (newDst[i][k] > 0.97) {
+          let maxPoint = {
+            x: k,
+            y: i,
+          };
+          let point = new cv.Point(k + templ.cols, i + templ.rows);
+          cv.rectangle(src, maxPoint, point, color, 1, cv.LINE_8, 0);
+          if (cnt == 0) console.log(newDst[i][k]);
+          if (++cnt > 10) break outter;
+        }
+        console.log(newDst[i][k]);
+        start++;
+      }
+      start = end;
+      end = end + dst.cols;
+    }
+    cv.imshow(this.barcodeCanvas.nativeElement, src);
+
+    src.delete();
+    templ.delete();
+    dst.delete();
+    mask.delete();
+  }
+
+  // * opencv contours
+  contours() {
+    let src = cv.imread(this.snapshotCanvas.nativeElement);
+    let dst = cv.Mat.zeros(src.rows, src.cols, cv.CV_8UC3);
+    let M = new cv.Mat();
+    let contours = new cv.MatVector();
+    let hierarchy = new cv.Mat();
+
+    // * 灰階
+    cv.cvtColor(src, src, cv.COLOR_RGBA2GRAY, 0);
+    // * 閾值
+    cv.threshold(
+      src,
+      src,
+      this.thresHoldValue,
+      255,
+      this.enableInvertColor ? cv.THRESH_BINARY_INV : cv.THRESH_BINARY
+    );
+
+    // * 形態學
+    M = cv.getStructuringElement(cv.MORPH_RECT, new cv.Size(3, 3));
+    cv.morphologyEx(src, src, cv.MORPH_OPEN, M);
+    M = cv.getStructuringElement(cv.MORPH_RECT, new cv.Size(5, 5));
+    cv.morphologyEx(src, src, cv.MORPH_CLOSE, M);
+
+    // * 輪廓偵測
+    cv.findContours(
+      src,
+      contours,
+      hierarchy,
+      cv.RETR_EXTERNAL,
+      cv.CHAIN_APPROX_SIMPLE
+    );
+
+    // * 畫輪廓
+    for (let i = 0; i < contours.size(); ++i) {
+      let color = new cv.Scalar(255, 255, 255);
+      cv.drawContours(dst, contours, i, color, 1, 8, hierarchy, 100);
+    }
+
+    // * 邊界矩型
+    for (let i = 0; i < contours.size(); ++i) {
+      let cnt = contours.get(i);
+      let rect = cv.boundingRect(cnt);
+      let color = new cv.Scalar(255, 0, 0, 255);
+      let point1 = new cv.Point(rect.x, rect.y);
+      let point2 = new cv.Point(rect.x + rect.width, rect.y + rect.height);
+      console.log(rect);
+
+      if (
+        rect.width > 100 &&
+        rect.height > 100 &&
+        Math.abs(rect.width - rect.height) <= 20
+      ) {
+        let d = new cv.Mat();
+        let dd = new cv.Mat();
+        color = new cv.Scalar(255, 255, 0, 255);
+        let r = new cv.Rect(rect.x, rect.y, rect.width, rect.height);
+        d = src.roi(r);
+        dd = d.clone();
+        cv.threshold(
+          dd,
+          dd,
+          this.thresHoldValue,
+          255,
+          this.enableInvertColor ? cv.THRESH_BINARY_INV : cv.THRESH_BINARY
+        );
+        cv.copyMakeBorder(
+          dd,
+          dd,
+          20,
+          20,
+          20,
+          20,
+          cv.BORDER_CONSTANT,
+          new cv.Scalar(255, 255, 255, 255)
+        );
+
+        // try {
+        //   const luminanceSource = new RGBLuminanceSource(
+        //     new Uint8ClampedArray(imageData.data),
+        //     imageData.height,
+        //     imageData.width
+        //   );
+        //   const binaryBitmap = new BinaryBitmap(
+        //     new HybridBinarizer(luminanceSource)
+        //   );
+        // } catch (error) {
+        //   console.log('no data');
+        // }
+        cv.imshow(this.barcodeCanvas.nativeElement, dd);
+        d.delete();
+        dd.delete();
+      }
+
+      // cv.rectangle(
+      //   src,
+      //   point1,
+      //   point2,
+      //   color,
+      //   2,
+      //   cv.LINE_AA,
+      //   0
+      // );
+      cnt.delete();
+    }
+
+    // * 顯示
+    cv.imshow(this.snapshotCanvas.nativeElement, src);
+
+    // 釋放
+    src.delete();
+    dst.delete();
+    M.delete();
+    contours.delete();
+    hierarchy.delete();
   }
 }

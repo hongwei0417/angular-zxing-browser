@@ -174,7 +174,7 @@
     "symbol-observable" "4.0.0"
     "uuid" "8.3.2"
 
-"@angular/common@^11.2.11 || ^12.0.4", "@angular/common@^12.0.0 || ^13.0.0-0", "@angular/common@~12.2.12", "@angular/common@12.2.12":
+"@angular/common@^11.2.11 || ^12.0.4", "@angular/common@^12.0.0 || ^13.0.0-0", "@angular/common@^6.0.0-rc.0 || ^6.0.0", "@angular/common@~12.2.12", "@angular/common@12.2.12":
   "integrity" "sha512-i1VUoGYYx3tMEpmGQvaLt6x4C/MWDxUPATKJwnawLbHDLfAHkyXiCASmcMtaNt1EvOd/uN/J2ONVpF6J49CnMQ=="
   "resolved" "https://registry.npmjs.org/@angular/common/-/common-12.2.12.tgz"
   "version" "12.2.12"
@@ -213,7 +213,7 @@
   "resolved" "https://registry.npmjs.org/@angular/compiler/-/compiler-9.0.0.tgz"
   "version" "9.0.0"
 
-"@angular/core@^11.2.11 || ^12.0.4", "@angular/core@^12.0.0 || ^13.0.0-0", "@angular/core@~12.2.12", "@angular/core@12.2.12":
+"@angular/core@^11.2.11 || ^12.0.4", "@angular/core@^12.0.0 || ^13.0.0-0", "@angular/core@^6.1.8", "@angular/core@~12.2.12", "@angular/core@12.2.12":
   "integrity" "sha512-DdZbhyVvwlYO5aLZi5IxJRflZ55Sae72cJAIK4+I5yTrVEf8iDwMZwnRhsv5rOwdEk12Zs8Ppb9JkpaFWium9Q=="
   "resolved" "https://registry.npmjs.org/@angular/core/-/core-12.2.12.tgz"
   "version" "12.2.12"
@@ -5665,6 +5665,13 @@
   "integrity" "sha512-Yd3UES5mWCSqR+qNT93S3UoYUkqAZ9lLg8a7g9rimsWmYGK8cVToA4/sF3RrshdyV3sAGMXVUmpMYOw+dLpOuw=="
   "resolved" "https://registry.npmjs.org/neo-async/-/neo-async-2.6.2.tgz"
   "version" "2.6.2"
+
+"ng-open-cv@^0.3.1":
+  "integrity" "sha512-BN4n/2ps6Kw6tpQzLzvsQO6+d9Rn5bYJSU3uiEGXbwmqs1UCzTxNhXJgWMW6klRLf+WS4zUQGjY06Mp/+kqVFQ=="
+  "resolved" "https://registry.npmjs.org/ng-open-cv/-/ng-open-cv-0.3.1.tgz"
+  "version" "0.3.1"
+  dependencies:
+    "tslib" "^1.9.0"
 
 "nice-try@^1.0.4":
   "integrity" "sha512-1nh45deeb5olNY7eX82BkPO7SSxR5SSYJiPTrTdFUVYwAl8CKMA5N9PjTYkHiRjisVcxcQ1HXdLhx2qxxJzLNQ=="
