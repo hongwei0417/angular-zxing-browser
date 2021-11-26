@@ -41,6 +41,7 @@ export class ZxingBrowserComponent implements OnInit, AfterViewInit {
   @ViewChild('video') video: ElementRef<HTMLVideoElement>;
   @ViewChild('mainPointers') mainPointers: ElementRef<HTMLCanvasElement>;
   @ViewChild('snapshotCanvas') snapshotCanvas: ElementRef<HTMLCanvasElement>;
+  @ViewChild('snapshotCanvas2') snapshotCanvas2: ElementRef<HTMLCanvasElement>;
   @ViewChild('barcodeCanvas') barcodeCanvas: ElementRef<HTMLCanvasElement>;
   @ViewChild('snapshotPointers')
   snapshotPointers: ElementRef<HTMLCanvasElement>;
@@ -267,10 +268,13 @@ export class ZxingBrowserComponent implements OnInit, AfterViewInit {
     const { cropWidth, cropHeight } = this.cropData;
     const SNAPSHOT_RATIO = 0.3;
     const snapshotCanvas = this.snapshotCanvas.nativeElement;
+    const snapshotCanvas2 = this.snapshotCanvas2.nativeElement;
     const snapshotPointers = this.snapshotPointers.nativeElement;
     const snapshotContainer = this.snapshotContainer.nativeElement;
     snapshotCanvas.width = cropWidth;
     snapshotCanvas.height = cropHeight;
+    snapshotCanvas2.width = cropWidth;
+    snapshotCanvas2.height = cropHeight;
     snapshotPointers.width = cropWidth;
     snapshotPointers.height = cropHeight;
     snapshotContainer.style.width = `${
@@ -916,7 +920,6 @@ export class ZxingBrowserComponent implements OnInit, AfterViewInit {
       template.rows
     );
 
-    console.log(result);
     let area = src.roi(rect);
     let copyArea = area.clone();
     cv.copyMakeBorder(
@@ -993,6 +996,7 @@ export class ZxingBrowserComponent implements OnInit, AfterViewInit {
   // * opencv contours
   contours() {
     let src = cv.imread(this.snapshotCanvas.nativeElement);
+    let src2 = cv.imread(this.snapshotCanvas.nativeElement);
     let dst = cv.Mat.zeros(src.rows, src.cols, cv.CV_8UC3);
     let M = new cv.Mat();
     let contours = new cv.MatVector();
@@ -1009,12 +1013,6 @@ export class ZxingBrowserComponent implements OnInit, AfterViewInit {
       this.enableInvertColor ? cv.THRESH_BINARY_INV : cv.THRESH_BINARY
     );
 
-    // * 形態學
-    M = cv.getStructuringElement(cv.MORPH_RECT, new cv.Size(3, 3));
-    cv.morphologyEx(src, src, cv.MORPH_OPEN, M);
-    M = cv.getStructuringElement(cv.MORPH_RECT, new cv.Size(5, 5));
-    cv.morphologyEx(src, src, cv.MORPH_CLOSE, M);
-
     // * 輪廓偵測
     cv.findContours(
       src,
@@ -1023,6 +1021,12 @@ export class ZxingBrowserComponent implements OnInit, AfterViewInit {
       cv.RETR_EXTERNAL,
       cv.CHAIN_APPROX_SIMPLE
     );
+
+    // * 形態學
+    M = cv.getStructuringElement(cv.MORPH_RECT, new cv.Size(3, 3));
+    cv.morphologyEx(src, src, cv.MORPH_OPEN, M);
+    M = cv.getStructuringElement(cv.MORPH_RECT, new cv.Size(5, 5));
+    cv.morphologyEx(src, src, cv.MORPH_CLOSE, M);
 
     // * 畫輪廓
     for (let i = 0; i < contours.size(); ++i) {
@@ -1037,7 +1041,6 @@ export class ZxingBrowserComponent implements OnInit, AfterViewInit {
       let color = new cv.Scalar(255, 0, 0, 255);
       let point1 = new cv.Point(rect.x, rect.y);
       let point2 = new cv.Point(rect.x + rect.width, rect.y + rect.height);
-      console.log(rect);
 
       if (
         rect.width > 100 &&
@@ -1050,13 +1053,7 @@ export class ZxingBrowserComponent implements OnInit, AfterViewInit {
         let r = new cv.Rect(rect.x, rect.y, rect.width, rect.height);
         d = src.roi(r);
         dd = d.clone();
-        cv.threshold(
-          dd,
-          dd,
-          this.thresHoldValue,
-          255,
-          this.enableInvertColor ? cv.THRESH_BINARY_INV : cv.THRESH_BINARY
-        );
+        cv.threshold(dd, dd, this.thresHoldValue, 255, cv.THRESH_BINARY_INV);
         cv.copyMakeBorder(
           dd,
           dd,
@@ -1085,23 +1082,17 @@ export class ZxingBrowserComponent implements OnInit, AfterViewInit {
         dd.delete();
       }
 
-      // cv.rectangle(
-      //   src,
-      //   point1,
-      //   point2,
-      //   color,
-      //   2,
-      //   cv.LINE_AA,
-      //   0
-      // );
+      cv.rectangle(src2, point1, point2, color, 2, cv.LINE_AA, 0);
       cnt.delete();
     }
 
     // * 顯示
-    cv.imshow(this.snapshotCanvas.nativeElement, src);
+    cv.imshow(this.snapshotCanvas2.nativeElement, src);
+    cv.imshow(this.snapshotCanvas.nativeElement, src2);
 
     // 釋放
     src.delete();
+    src2.delete();
     dst.delete();
     M.delete();
     contours.delete();
