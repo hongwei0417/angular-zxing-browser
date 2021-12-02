@@ -7,7 +7,11 @@ import {
   ViewChild,
 } from '@angular/core';
 import { MatDialog } from '@angular/material/dialog';
-import { BrowserMultiFormatReader } from '@zxing/browser';
+import {
+  BrowserCodeReader,
+  BrowserDatamatrixCodeReader,
+  BrowserMultiFormatReader,
+} from '@zxing/browser';
 import {
   BarcodeFormat,
   BinaryBitmap,
@@ -68,10 +72,10 @@ export class ZxingBrowserComponent implements OnInit, AfterViewInit {
   active = false;
 
   formatsEnabled: BarcodeFormat[] = [
-    BarcodeFormat.CODE_128,
+    // BarcodeFormat.CODE_128,
     BarcodeFormat.DATA_MATRIX,
-    BarcodeFormat.EAN_13,
-    BarcodeFormat.QR_CODE,
+    // BarcodeFormat.EAN_13,
+    // BarcodeFormat.QR_CODE,
   ];
 
   stream = null;
@@ -83,7 +87,7 @@ export class ZxingBrowserComponent implements OnInit, AfterViewInit {
   error: any;
   zoomRatio = 1;
   frameCount = 0;
-  scanPeriod = 60;
+  scanPeriod = 30;
   thresHoldValue = 0;
   blurValue = 10;
 
@@ -154,8 +158,8 @@ export class ZxingBrowserComponent implements OnInit, AfterViewInit {
 
   get videoResolution() {
     return {
-      width: { min: 1024, ideal: 1920, max: 1920 },
-      height: { min: 576, ideal: 1080, max: 1920 },
+      width: { min: 1024, ideal: 1280, max: 1920 },
+      height: { min: 576, ideal: 720, max: 1920 },
     };
   }
 
@@ -196,7 +200,9 @@ export class ZxingBrowserComponent implements OnInit, AfterViewInit {
 
   initAnalyzer() {
     this.formats = this.formatsEnabled;
-    this.codeReader = new BrowserMultiFormatReader(this.hints);
+    this.codeReader = new BrowserMultiFormatReader();
+    // this.codeReader = new BrowserMultiFormatReader(this.hints);
+    // this.codeReader = new BrowserDatamatrixCodeReader();
   }
 
   async loadDevices() {
@@ -309,7 +315,7 @@ export class ZxingBrowserComponent implements OnInit, AfterViewInit {
   setScannerArea(mode: string) {
     const getAspect = {
       auto: () => {
-        return { width: '300px', height: '300px' };
+        return { width: '320px', height: '320px' };
       },
       '1D': () => {
         return { width: '800px', height: '200px' };
@@ -456,10 +462,10 @@ export class ZxingBrowserComponent implements OnInit, AfterViewInit {
 
   openCVImageFilter() {
     try {
-      // for (let i = 1; i <= 3; i++) {
+      // for (let i = 1; i <= 10; i++) {
       //   const image = this.dataMatrixTemplateImage.nativeElement;
-      //   image.style.width = `${100 * i}px`;
-      //   image.style.height = `${100 * i}px`;
+      //   image.style.width = `${100 + 20 * i}px`;
+      //   image.style.height = `${100 + 20 * i}px`;
       //   this.matchOneTemplate();
       // }
       // this.matchMultipleTemplate();
@@ -495,6 +501,8 @@ export class ZxingBrowserComponent implements OnInit, AfterViewInit {
     try {
       const result = this.codeReader.decodeFromCanvas(
         this.barcodeCanvas.nativeElement
+        // this.snapshotCanvas.nativeElement
+        // this.snapshotCanvas2.nativeElement
       );
       this.result = result.getText();
       this.resultPoints$.next(result.getResultPoints());
@@ -697,7 +705,7 @@ export class ZxingBrowserComponent implements OnInit, AfterViewInit {
     // console.log(histogram);
   }
 
-  // * 閾值(兩極)
+  // * 閾值(二值化)
   thresHold(data: Uint8ClampedArray) {
     for (var i = 0; i < data.length; i += 4) {
       let r = data[i];
@@ -712,8 +720,78 @@ export class ZxingBrowserComponent implements OnInit, AfterViewInit {
     }
   }
 
+  // * 區域二值化
+  areaThreshold(img: ImageData, blockWidth: number, blockHeight: number) {
+    const width = img.width; // 寬度(pixel)
+    const height = img.height; // 高度(pixel)
+    const subWidth = Math.floor(img.width / blockWidth); // 區域寬度
+    const subHeight = Math.floor(img.height / blockHeight); // 區域高度
+    const widthSize = width * 4; //  寬度資料數量
+    const heightSize = height * widthSize; // 高度資料數量
+
+    console.log(width, height);
+    console.log(subWidth, subHeight);
+    console.log(widthSize, heightSize);
+
+    let result = [];
+    for (let y = 0; y < subHeight + 1; y++) {
+      const yOffset = y * blockHeight; // y的起始行數
+      const yStart = yOffset * widthSize; // y的起始位置
+      for (let yy = 0; yy < blockHeight; yy++) {
+        // 處理一整行區塊
+        const yyStart = yStart + yy * widthSize;
+        if (yyStart < heightSize) {
+          for (let x = 0; x < subWidth + 1; x++) {
+            const xOffset = x * blockWidth * 4; // x的起始列數
+            const xStart = yyStart + xOffset; // x的起始位置
+            let subResult = [];
+            // 處理一個區塊
+            for (let xx = 0; xx < blockWidth * 4; xx += 4) {
+              let curr = xStart + xx; // 目前資料位置
+              let max = (yOffset + yy + 1) * widthSize; // 該行最大位置
+              if (curr < max) {
+                subResult.push(curr);
+              }
+            }
+            // 紀錄結果
+            let blockIndex = x + y * (subWidth + 1); // 取得該區塊的編號
+            if (result[blockIndex]) {
+              result[blockIndex].push(...subResult);
+            } else {
+              result[blockIndex] = subResult;
+            }
+          }
+        }
+      }
+    }
+
+    // 二值化處理
+    for (let i = 0; i < result.length; i++) {
+      const blockData = [];
+      for (let j = 0; j < result[i].length; j++) {
+        let index = result[i][j];
+        blockData.push(img.data[index]);
+        blockData.push(img.data[index + 1]);
+        blockData.push(img.data[index + 2]);
+        blockData.push(img.data[index + 3]);
+      }
+      const threshold = this.OTSU(
+        new Uint8ClampedArray(blockData),
+        result[i].length
+      );
+      console.log(threshold);
+      for (var j = 0; j < blockData.length; j += 4) {
+        let r = blockData[i];
+        let value = r >= threshold ? 255 : 0;
+        let index = result[i][j / 4];
+        img.data[index] = img.data[index + 1] = img.data[index + 2] = value;
+      }
+    }
+    console.log(img.data);
+  }
+
   // * 一維OTSU(大津演算法)
-  OTSU(data: Uint8ClampedArray, size: number) {
+  OTSU(data: Uint8ClampedArray | any, size: number) {
     let histogram = new Array<number>(255); //每個灰度值出現次數(灰階直方圖)
     let pHistogram = new Array<number>(255); //每個灰度值出現比例(機率)
     let sumPHistogram = new Array<number>(255); //每個灰度比例之和
@@ -749,7 +827,7 @@ export class ZxingBrowserComponent implements OnInit, AfterViewInit {
         i > 0 ? wHistogram[i] + sumWHistogram[i - 1] : wHistogram[i];
     }
 
-    //將區塊分為A、B區域，並從0~255中分別計算OSTU值並找出最大值作為分割閾值
+    //將區塊分為A、B區域，並從0~255中分別計算OTSU值並找出最大值作為分割閾值
     for (let i = 0; i < 256; i++) {
       let pA = sumPHistogram[i]; //A區塊機率和
       let pB = 1 - pA; //B區塊機率和
@@ -758,7 +836,7 @@ export class ZxingBrowserComponent implements OnInit, AfterViewInit {
       let uA = wpA / pA; //A區塊平均灰度值
       let uB = wpB / pB; //B區塊平均灰度值
 
-      //計算類間變異數差(OSTU)
+      //計算類間變異數差(OTSU)
       temp = pA * pB * Math.pow(uA - uB, 2); //類間方差公式
       if (temp > sigma2Max) {
         sigma2Max = temp;
@@ -766,6 +844,7 @@ export class ZxingBrowserComponent implements OnInit, AfterViewInit {
       }
     }
     this.thresHoldValue = threshold;
+    return threshold;
   }
 
   // * 模糊
@@ -925,10 +1004,10 @@ export class ZxingBrowserComponent implements OnInit, AfterViewInit {
     cv.copyMakeBorder(
       copyArea,
       copyArea,
-      20,
-      20,
-      20,
-      20,
+      30,
+      30,
+      30,
+      30,
       cv.BORDER_CONSTANT,
       new cv.Scalar(255, 255, 255, 255)
     );
@@ -1002,16 +1081,74 @@ export class ZxingBrowserComponent implements OnInit, AfterViewInit {
     let contours = new cv.MatVector();
     let hierarchy = new cv.Mat();
 
+    // * 模糊
+    // cv.GaussianBlur(src, src, new cv.Size(9, 9), 0, 0, cv.BORDER_DEFAULT);
+
     // * 灰階
-    cv.cvtColor(src, src, cv.COLOR_RGBA2GRAY, 0);
+    cv.cvtColor(src, src, cv.COLOR_RGBA2GRAY);
+
+    // * 將1通道轉換成4通道image data
+    // let grayRGBA = src.clone();
+    // cv.cvtColor(grayRGBA, grayRGBA, cv.COLOR_GRAY2RGBA);
+    // let imageData = new ImageData(
+    //   new Uint8ClampedArray(grayRGBA.data),
+    //   grayRGBA.cols,
+    //   grayRGBA.rows
+    // );
+    // grayRGBA.delete();
+
     // * 閾值
-    cv.threshold(
-      src,
-      src,
-      this.thresHoldValue,
-      255,
-      this.enableInvertColor ? cv.THRESH_BINARY_INV : cv.THRESH_BINARY
-    );
+    // if (this.enableThreshold) {
+    //   this.areaThreshold(imageData, 200, 200);
+    //   // this.OTSU(imageData.data, imageData.width * imageData.height);
+    // }
+    // src = cv.matFromImageData(imageData);
+    // cv.cvtColor(src, src, cv.COLOR_RGBA2GRAY);
+    // console.log(src.data);
+
+    const BLOCK_SIZE = 32;
+    let subWidth = Math.floor(src.cols / BLOCK_SIZE);
+    let subHeight = Math.floor(src.rows / BLOCK_SIZE);
+    for (let i = 0; i < subHeight; i++) {
+      for (let j = 0; j < subWidth; j++) {
+        let r = new cv.Mat();
+        let t = new cv.Rect(
+          j * BLOCK_SIZE,
+          i * BLOCK_SIZE,
+          BLOCK_SIZE,
+          BLOCK_SIZE
+        );
+        r = src.roi(t);
+        cv.threshold(r, r, this.thresHoldValue, 255, cv.THRESH_OTSU);
+        r.delete();
+      }
+    }
+    // ADAPTIVE_THRESH_GAUSSIAN_C
+    // cv.adaptiveThreshold(
+    //   src,
+    //   src,
+    //   this.thresHoldValue,
+    //   cv.ADAPTIVE_THRESH_GAUSSIAN_C,
+    //   this.enableInvertColor ? cv.THRESH_BINARY_INV : cv.THRESH_BINARY,
+    //   15,
+    //   5
+    // );
+    // cv.threshold(
+    //   src,
+    //   src,
+    //   this.thresHoldValue,
+    //   255,
+    //   (this.enableInvertColor ? cv.THRESH_BINARY_INV : cv.THRESH_BINARY) +
+    //     cv.THRESH_OTSU
+    //   // cv.THRESH_TRIANGLE
+    //   // this.enableInvertColor ? cv.THRESH_BINARY_INV : cv.THRESH_BINARY
+    // );
+
+    // * 形態學
+    M = cv.getStructuringElement(cv.MORPH_RECT, new cv.Size(3, 3));
+    cv.morphologyEx(src, src, cv.MORPH_OPEN, M);
+    M = cv.getStructuringElement(cv.MORPH_RECT, new cv.Size(5, 5));
+    cv.morphologyEx(src, src, cv.MORPH_CLOSE, M);
 
     // * 輪廓偵測
     cv.findContours(
@@ -1022,19 +1159,15 @@ export class ZxingBrowserComponent implements OnInit, AfterViewInit {
       cv.CHAIN_APPROX_SIMPLE
     );
 
-    // * 形態學
-    M = cv.getStructuringElement(cv.MORPH_RECT, new cv.Size(3, 3));
-    cv.morphologyEx(src, src, cv.MORPH_OPEN, M);
-    M = cv.getStructuringElement(cv.MORPH_RECT, new cv.Size(5, 5));
-    cv.morphologyEx(src, src, cv.MORPH_CLOSE, M);
-
     // * 畫輪廓
-    for (let i = 0; i < contours.size(); ++i) {
-      let color = new cv.Scalar(255, 255, 255);
-      cv.drawContours(dst, contours, i, color, 1, 8, hierarchy, 100);
-    }
+    // for (let i = 0; i < contours.size(); ++i) {
+    //   let color = new cv.Scalar(255, 255, 255);
+    //   cv.drawContours(dst, contours, i, color, 1, 8, hierarchy, 100);
+    // }
 
     // * 邊界矩型
+    let result = new cv.Mat();
+    let maxIndex = null;
     for (let i = 0; i < contours.size(); ++i) {
       let cnt = contours.get(i);
       let rect = cv.boundingRect(cnt);
@@ -1042,60 +1175,88 @@ export class ZxingBrowserComponent implements OnInit, AfterViewInit {
       let point1 = new cv.Point(rect.x, rect.y);
       let point2 = new cv.Point(rect.x + rect.width, rect.y + rect.height);
 
-      if (
-        rect.width > 100 &&
-        rect.height > 100 &&
-        Math.abs(rect.width - rect.height) <= 20
-      ) {
-        let d = new cv.Mat();
-        let dd = new cv.Mat();
-        color = new cv.Scalar(255, 255, 0, 255);
-        let r = new cv.Rect(rect.x, rect.y, rect.width, rect.height);
-        d = src.roi(r);
-        dd = d.clone();
-        cv.threshold(dd, dd, this.thresHoldValue, 255, cv.THRESH_BINARY_INV);
-        cv.copyMakeBorder(
-          dd,
-          dd,
-          20,
-          20,
-          20,
-          20,
-          cv.BORDER_CONSTANT,
-          new cv.Scalar(255, 255, 255, 255)
-        );
+      let maxRect = this.getRectInfo(contours, maxIndex || 0);
+      let currRect = this.getRectInfo(contours, i);
 
-        // try {
-        //   const luminanceSource = new RGBLuminanceSource(
-        //     new Uint8ClampedArray(imageData.data),
-        //     imageData.height,
-        //     imageData.width
-        //   );
-        //   const binaryBitmap = new BinaryBitmap(
-        //     new HybridBinarizer(luminanceSource)
-        //   );
-        // } catch (error) {
-        //   console.log('no data');
-        // }
-        cv.imshow(this.barcodeCanvas.nativeElement, dd);
-        d.delete();
-        dd.delete();
+      if (
+        currRect.rectArea > 10000 &&
+        currRect.aspectRatio > 0.9 &&
+        currRect.extent > 0.3 &&
+        currRect.rectArea > maxRect.rectArea // 找最大面積
+      ) {
+        maxIndex = i;
       }
 
       cv.rectangle(src2, point1, point2, color, 2, cv.LINE_AA, 0);
       cnt.delete();
     }
 
-    // * 顯示
-    cv.imshow(this.snapshotCanvas2.nativeElement, src);
-    cv.imshow(this.snapshotCanvas.nativeElement, src2);
+    // * 擷取和畫出目標矩形
+    if (maxIndex) {
+      let maxRect = this.getRectInfo(contours, maxIndex);
+      let color = new cv.Scalar(255, 255, 0, 255);
+      let point1 = new cv.Point(maxRect.rect.x, maxRect.rect.y);
+      let point2 = new cv.Point(
+        maxRect.rect.x + maxRect.rect.width,
+        maxRect.rect.y + maxRect.rect.height
+      );
+      let roiRect = new cv.Mat();
+      let r = new cv.Rect(
+        maxRect.rect.x,
+        maxRect.rect.y,
+        maxRect.rect.width,
+        maxRect.rect.height
+      );
+      roiRect = src.roi(r).clone();
+      cv.threshold(
+        roiRect,
+        roiRect,
+        this.thresHoldValue,
+        255,
+        cv.THRESH_BINARY_INV
+      );
+      cv.copyMakeBorder(
+        roiRect,
+        result,
+        200,
+        200,
+        200,
+        200,
+        cv.BORDER_CONSTANT,
+        new cv.Scalar(255, 255, 255, 255)
+      );
+      cv.rectangle(src2, point1, point2, color, 2, cv.LINE_AA, 0);
+      roiRect.delete();
+    }
 
-    // 釋放
+    // * 顯示
+    cv.imshow(this.snapshotCanvas.nativeElement, src2);
+    cv.imshow(this.snapshotCanvas2.nativeElement, src);
+    if (result.size().width && result.size().height) {
+      cv.imshow(this.barcodeCanvas.nativeElement, result);
+    }
+
+    // * 釋放
     src.delete();
     src2.delete();
     dst.delete();
     M.delete();
     contours.delete();
     hierarchy.delete();
+    result.delete();
+  }
+
+  getRectInfo(contours: any, i: number) {
+    let cnt = contours.get(i);
+    let rect = cv.boundingRect(cnt);
+    let area = cv.contourArea(cnt, false);
+    let rectArea = rect.width * rect.height; //矩形面積
+    let extent = area / rectArea; // 輪廓面積占矩形面積比
+    let aspectRatio =
+      rect.height > rect.width
+        ? rect.width / rect.height
+        : rect.height / rect.width; // 長寬比
+    // console.log(rect, rectArea, extent, aspectRatio);
+    return { rect, rectArea, extent, aspectRatio };
   }
 }
