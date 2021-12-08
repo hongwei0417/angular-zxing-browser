@@ -158,8 +158,8 @@ export class ZxingBrowserComponent implements OnInit, AfterViewInit {
 
   get videoResolution() {
     return {
-      width: { min: 1024, ideal: 1280, max: 1920 },
-      height: { min: 576, ideal: 720, max: 1920 },
+      width: { min: 1280, ideal: 1920, max: 1920 },
+      height: { min: 720, ideal: 1080, max: 1080 },
     };
   }
 
@@ -444,6 +444,7 @@ export class ZxingBrowserComponent implements OnInit, AfterViewInit {
   captureImage() {
     const { x0, y0, cropWidth, cropHeight } = this.cropData;
     const snapShotCtx = this.snapshotCanvas.nativeElement.getContext('2d');
+    const mask = this.dataMatrixTemplateImage.nativeElement;
     snapShotCtx.drawImage(
       this.video.nativeElement,
       x0,
@@ -456,6 +457,7 @@ export class ZxingBrowserComponent implements OnInit, AfterViewInit {
       cropHeight * this.zoomRatio
     );
 
+    // snapShotCtx.drawImage(mask, 0, 0);
     this.openCVImageFilter();
     // this.nativeImageFilter();
   }
@@ -720,7 +722,7 @@ export class ZxingBrowserComponent implements OnInit, AfterViewInit {
     }
   }
 
-  // * 區域二值化
+  // ! 區域二值化(有問題)
   areaThreshold(img: ImageData, blockWidth: number, blockHeight: number) {
     const width = img.width; // 寬度(pixel)
     const height = img.height; // 高度(pixel)
@@ -1074,176 +1076,275 @@ export class ZxingBrowserComponent implements OnInit, AfterViewInit {
 
   // * opencv contours
   contours() {
-    let src = cv.imread(this.snapshotCanvas.nativeElement);
-    let src2 = cv.imread(this.snapshotCanvas.nativeElement);
-    let dst = cv.Mat.zeros(src.rows, src.cols, cv.CV_8UC3);
-    let M = new cv.Mat();
-    let contours = new cv.MatVector();
-    let hierarchy = new cv.Mat();
+    try {
+      let src = cv.imread(this.snapshotCanvas.nativeElement);
+      let src2 = cv.imread(this.snapshotCanvas.nativeElement);
+      let dst = cv.Mat.zeros(src.rows, src.cols, cv.CV_8UC3);
+      let M = new cv.Mat();
+      let contours = new cv.MatVector();
+      let hierarchy = new cv.Mat();
 
-    // * 模糊
-    // cv.GaussianBlur(src, src, new cv.Size(9, 9), 0, 0, cv.BORDER_DEFAULT);
+      // * 灰階
+      cv.cvtColor(src, src, cv.COLOR_RGBA2GRAY);
 
-    // * 灰階
-    cv.cvtColor(src, src, cv.COLOR_RGBA2GRAY);
+      // * 校色板
+      // let blockSize = 32;
+      // let average = cv.mean(src)[0];
+      // let subRows = Math.ceil(src.rows / blockSize);
+      // let subCols = Math.ceil(src.cols / blockSize);
+      // let blockImage = new cv.Mat.zeros(subRows, subCols, cv.CV_32FC1);
 
-    // * 將1通道轉換成4通道image data
-    // let grayRGBA = src.clone();
-    // cv.cvtColor(grayRGBA, grayRGBA, cv.COLOR_GRAY2RGBA);
-    // let imageData = new ImageData(
-    //   new Uint8ClampedArray(grayRGBA.data),
-    //   grayRGBA.cols,
-    //   grayRGBA.rows
-    // );
-    // grayRGBA.delete();
+      // for (let i = 0; i < subRows; i++) {
+      //   for (let j = 0; j < subCols; j++) {
+      //     let rowMin = i * blockSize;
+      //     let rowMax = (i + 1) * blockSize;
+      //     let colMin = j * blockSize;
+      //     let colMax = (j + 1) * blockSize;
+      //     if (rowMax > src.rows) rowMax = src.rows;
+      //     if (colMax > src.cols) colMax = src.cols;
 
-    // * 閾值
-    // if (this.enableThreshold) {
-    //   this.areaThreshold(imageData, 200, 200);
-    //   // this.OTSU(imageData.data, imageData.width * imageData.height);
-    // }
-    // src = cv.matFromImageData(imageData);
-    // cv.cvtColor(src, src, cv.COLOR_RGBA2GRAY);
-    // console.log(src.data);
+      //     let rect = new cv.Rect(
+      //       colMin,
+      //       rowMin,
+      //       colMax - colMin,
+      //       rowMax - rowMin
+      //     );
+      //     let roi = new cv.Mat();
+      //     roi = src.roi(rect);
+      //     let temaver = cv.mean(roi)[0];
+      //     blockImage.floatPtr(i, j)[0] = temaver;
+      //     roi.delete();
+      //   }
+      // }
 
-    const BLOCK_SIZE = 32;
-    let subWidth = Math.floor(src.cols / BLOCK_SIZE);
-    let subHeight = Math.floor(src.rows / BLOCK_SIZE);
-    for (let i = 0; i < subHeight; i++) {
-      for (let j = 0; j < subWidth; j++) {
-        let r = new cv.Mat();
-        let t = new cv.Rect(
-          j * BLOCK_SIZE,
-          i * BLOCK_SIZE,
-          BLOCK_SIZE,
-          BLOCK_SIZE
+      // for (let i = 0; i < subRows; i++) {
+      //   for (let j = 0; j < subCols; j++) {
+      //     blockImage.floatPtr(i, j)[0] -= average;
+      //   }
+      // }
+
+      // let tempResult = new cv.Mat();
+      // let blockImage2 = new cv.Mat();
+      // let tempSrc = new cv.Mat();
+      // cv.resize(blockImage, blockImage2, src.size(), 0, 0, cv.INTER_CUBIC);
+      // src.convertTo(tempSrc, cv.CV_32FC1);
+      // cv.subtract(tempSrc, blockImage2, tempResult);
+      // tempResult.convertTo(src, cv.CV_8UC1);
+
+      // tempSrc.delete();
+      // blockImage.delete();
+      // blockImage2.delete();
+      // tempResult.delete();
+
+      // cv.imshow(this.snapshotCanvas2.nativeElement, src);
+
+      // * 生成棋盤格
+      // for (let i = 0; i < src2.rows; i++) {
+      //   for (let j = 0; j < src2.cols; j++) {
+      //     if ((Math.floor(i / 50) + Math.floor(j / 50)) % 2) {
+      //       // src2.ucharPtr(i, j)[0] = 255;
+      //       // src2.ucharPtr(i, j)[1] = 255;
+      //       // src2.ucharPtr(i, j)[2] = 255;
+      //       // src2.ucharPtr(i, j)[3] = 50;
+      //     } else {
+      //       // src2.ucharPtr(i, j)[0] = 0;
+      //       // src2.ucharPtr(i, j)[1] = 0;
+      //       // src2.ucharPtr(i, j)[2] = 0;
+      //       // src2.ucharPtr(i, j)[3] = 255;
+      //     }
+      //   }
+      // }
+
+      // * 一般二值化
+      // let grayRGBA = src.clone();
+      // cv.cvtColor(grayRGBA, grayRGBA, cv.COLOR_GRAY2RGBA);
+      // let imageData = new ImageData(
+      //   new Uint8ClampedArray(grayRGBA.data),
+      //   grayRGBA.cols,
+      //   grayRGBA.rows
+      // );
+      // grayRGBA.delete();
+
+      // if (this.enableThreshold) {
+      //   // this.areaThreshold(imageData, 200, 200);
+      //   this.OTSU(imageData.data, imageData.width * imageData.height);
+      // }
+      // src = cv.matFromImageData(imageData);
+      // cv.cvtColor(src, src, cv.COLOR_RGBA2GRAY);
+      // cv.threshold(
+      //   src,
+      //   src,
+      //   this.thresHoldValue,
+      //   255,
+      //   cv.THRESH_OTSU +
+      //     (this.enableInvertColor ? cv.THRESH_BINARY_INV : cv.THRESH_BINARY)
+      // );
+
+      // * 區域二值化
+      // const BLOCK_SIZE = src.rows / 8;
+      // let subHeight = Math.floor(src.rows / BLOCK_SIZE);
+      // let subWidth = Math.floor(src.cols / BLOCK_SIZE);
+      // for (let i = 0; i < subHeight; i++) {
+      //   for (let j = 0; j < subWidth; j++) {
+      //     let r = new cv.Mat();
+      //     let t = new cv.Rect(
+      //       j * BLOCK_SIZE,
+      //       i * BLOCK_SIZE,
+      //       BLOCK_SIZE,
+      //       BLOCK_SIZE
+      //     );
+      //     r = src.roi(t);
+      //     cv.threshold(
+      //       r,
+      //       r,
+      //       this.thresHoldValue,
+      //       255,
+      //       cv.THRESH_OTSU +
+      //         (this.enableInvertColor ? cv.THRESH_BINARY_INV : cv.THRESH_BINARY)
+      //     );
+      //     r.delete();
+      //   }
+      // }
+
+      // * ADAPTIVE_THRESH_GAUSSIAN_C
+      cv.adaptiveThreshold(
+        src,
+        src,
+        this.thresHoldValue || 255,
+        cv.ADAPTIVE_THRESH_GAUSSIAN_C,
+        this.enableInvertColor ? cv.THRESH_BINARY_INV : cv.THRESH_BINARY,
+        321,
+        3
+      );
+      // cv.threshold(
+      //   src,
+      //   src,
+      //   this.thresHoldValue,
+      //   255,
+      //   (this.enableInvertColor ? cv.THRESH_BINARY_INV : cv.THRESH_BINARY) +
+      //     cv.THRESH_OTSU
+      //   // cv.THRESH_TRIANGLE
+      //   // this.enableInvertColor ? cv.THRESH_BINARY_INV : cv.THRESH_BINARY
+      // );
+
+      // * 形態學
+      M = cv.getStructuringElement(cv.MORPH_RECT, new cv.Size(3, 3));
+      cv.morphologyEx(src, src, cv.MORPH_OPEN, M);
+      M = cv.getStructuringElement(cv.MORPH_RECT, new cv.Size(5, 5));
+      cv.morphologyEx(src, src, cv.MORPH_CLOSE, M);
+      // M = cv.Mat.ones(6, 6, cv.CV_8U);
+      // cv.erode(
+      //   src,
+      //   src,
+      //   M,
+      //   new cv.Point(-1, -1),
+      //   1,
+      //   cv.BORDER_CONSTANT,
+      //   cv.morphologyDefaultBorderValue()
+      // );
+
+      // * 模糊
+      // cv.GaussianBlur(src, src, new cv.Size(9, 9), 0, 0, cv.BORDER_DEFAULT);
+      // cv.bilateralFilter(src, src, 9, 75, 75, cv.BORDER_DEFAULT);
+
+      // * 輪廓偵測
+      cv.findContours(
+        src,
+        contours,
+        hierarchy,
+        cv.RETR_EXTERNAL,
+        cv.CHAIN_APPROX_SIMPLE
+      );
+
+      // * 畫輪廓
+      // for (let i = 0; i < contours.size(); ++i) {
+      //   let color = new cv.Scalar(255, 255, 255);
+      //   cv.drawContours(dst, contours, i, color, 1, 8, hierarchy, 100);
+      // }
+
+      // * 邊界矩型
+      let result = new cv.Mat();
+      let maxIndex = null;
+      for (let i = 0; i < contours.size(); ++i) {
+        let cnt = contours.get(i);
+        let rect = cv.boundingRect(cnt);
+        let color = new cv.Scalar(255, 0, 0, 255);
+        let point1 = new cv.Point(rect.x, rect.y);
+        let point2 = new cv.Point(rect.x + rect.width, rect.y + rect.height);
+
+        let maxRect = this.getRectInfo(contours, maxIndex || 0);
+        let currRect = this.getRectInfo(contours, i);
+
+        if (
+          currRect.rectArea > 10000 &&
+          currRect.aspectRatio > 0.9 &&
+          // currRect.extent > 0.3 &&
+          currRect.rectArea > maxRect.rectArea // 找最大面積
+        ) {
+          maxIndex = i;
+        }
+
+        cv.rectangle(src2, point1, point2, color, 2, cv.LINE_AA, 0);
+        cnt.delete();
+      }
+
+      // * 擷取和畫出目標矩形
+      if (maxIndex) {
+        let maxRect = this.getRectInfo(contours, maxIndex);
+        let color = new cv.Scalar(255, 255, 0, 255);
+        let point1 = new cv.Point(maxRect.rect.x, maxRect.rect.y);
+        let point2 = new cv.Point(
+          maxRect.rect.x + maxRect.rect.width,
+          maxRect.rect.y + maxRect.rect.height
         );
-        r = src.roi(t);
-        cv.threshold(r, r, this.thresHoldValue, 255, cv.THRESH_OTSU);
-        r.delete();
-      }
-    }
-    // ADAPTIVE_THRESH_GAUSSIAN_C
-    // cv.adaptiveThreshold(
-    //   src,
-    //   src,
-    //   this.thresHoldValue,
-    //   cv.ADAPTIVE_THRESH_GAUSSIAN_C,
-    //   this.enableInvertColor ? cv.THRESH_BINARY_INV : cv.THRESH_BINARY,
-    //   15,
-    //   5
-    // );
-    // cv.threshold(
-    //   src,
-    //   src,
-    //   this.thresHoldValue,
-    //   255,
-    //   (this.enableInvertColor ? cv.THRESH_BINARY_INV : cv.THRESH_BINARY) +
-    //     cv.THRESH_OTSU
-    //   // cv.THRESH_TRIANGLE
-    //   // this.enableInvertColor ? cv.THRESH_BINARY_INV : cv.THRESH_BINARY
-    // );
-
-    // * 形態學
-    M = cv.getStructuringElement(cv.MORPH_RECT, new cv.Size(3, 3));
-    cv.morphologyEx(src, src, cv.MORPH_OPEN, M);
-    M = cv.getStructuringElement(cv.MORPH_RECT, new cv.Size(5, 5));
-    cv.morphologyEx(src, src, cv.MORPH_CLOSE, M);
-
-    // * 輪廓偵測
-    cv.findContours(
-      src,
-      contours,
-      hierarchy,
-      cv.RETR_EXTERNAL,
-      cv.CHAIN_APPROX_SIMPLE
-    );
-
-    // * 畫輪廓
-    // for (let i = 0; i < contours.size(); ++i) {
-    //   let color = new cv.Scalar(255, 255, 255);
-    //   cv.drawContours(dst, contours, i, color, 1, 8, hierarchy, 100);
-    // }
-
-    // * 邊界矩型
-    let result = new cv.Mat();
-    let maxIndex = null;
-    for (let i = 0; i < contours.size(); ++i) {
-      let cnt = contours.get(i);
-      let rect = cv.boundingRect(cnt);
-      let color = new cv.Scalar(255, 0, 0, 255);
-      let point1 = new cv.Point(rect.x, rect.y);
-      let point2 = new cv.Point(rect.x + rect.width, rect.y + rect.height);
-
-      let maxRect = this.getRectInfo(contours, maxIndex || 0);
-      let currRect = this.getRectInfo(contours, i);
-
-      if (
-        currRect.rectArea > 10000 &&
-        currRect.aspectRatio > 0.9 &&
-        currRect.extent > 0.3 &&
-        currRect.rectArea > maxRect.rectArea // 找最大面積
-      ) {
-        maxIndex = i;
+        let roiRect = new cv.Mat();
+        let r = new cv.Rect(
+          maxRect.rect.x,
+          maxRect.rect.y,
+          maxRect.rect.width,
+          maxRect.rect.height
+        );
+        roiRect = src.roi(r).clone();
+        cv.threshold(
+          roiRect,
+          roiRect,
+          this.thresHoldValue,
+          255,
+          cv.THRESH_BINARY_INV
+        );
+        cv.copyMakeBorder(
+          roiRect,
+          result,
+          200,
+          200,
+          200,
+          200,
+          cv.BORDER_CONSTANT,
+          new cv.Scalar(255, 255, 255, 255)
+        );
+        cv.rectangle(src2, point1, point2, color, 2, cv.LINE_AA, 0);
+        roiRect.delete();
       }
 
-      cv.rectangle(src2, point1, point2, color, 2, cv.LINE_AA, 0);
-      cnt.delete();
-    }
+      // * 顯示
+      cv.imshow(this.snapshotCanvas.nativeElement, src2);
+      cv.imshow(this.snapshotCanvas2.nativeElement, src);
+      if (result.size().width && result.size().height) {
+        cv.imshow(this.barcodeCanvas.nativeElement, result);
+      }
 
-    // * 擷取和畫出目標矩形
-    if (maxIndex) {
-      let maxRect = this.getRectInfo(contours, maxIndex);
-      let color = new cv.Scalar(255, 255, 0, 255);
-      let point1 = new cv.Point(maxRect.rect.x, maxRect.rect.y);
-      let point2 = new cv.Point(
-        maxRect.rect.x + maxRect.rect.width,
-        maxRect.rect.y + maxRect.rect.height
-      );
-      let roiRect = new cv.Mat();
-      let r = new cv.Rect(
-        maxRect.rect.x,
-        maxRect.rect.y,
-        maxRect.rect.width,
-        maxRect.rect.height
-      );
-      roiRect = src.roi(r).clone();
-      cv.threshold(
-        roiRect,
-        roiRect,
-        this.thresHoldValue,
-        255,
-        cv.THRESH_BINARY_INV
-      );
-      cv.copyMakeBorder(
-        roiRect,
-        result,
-        200,
-        200,
-        200,
-        200,
-        cv.BORDER_CONSTANT,
-        new cv.Scalar(255, 255, 255, 255)
-      );
-      cv.rectangle(src2, point1, point2, color, 2, cv.LINE_AA, 0);
-      roiRect.delete();
+      // * 釋放
+      src.delete();
+      src2.delete();
+      dst.delete();
+      M.delete();
+      contours.delete();
+      hierarchy.delete();
+      result.delete();
+    } catch (error) {
+      console.log(error);
+      throw error;
     }
-
-    // * 顯示
-    cv.imshow(this.snapshotCanvas.nativeElement, src2);
-    cv.imshow(this.snapshotCanvas2.nativeElement, src);
-    if (result.size().width && result.size().height) {
-      cv.imshow(this.barcodeCanvas.nativeElement, result);
-    }
-
-    // * 釋放
-    src.delete();
-    src2.delete();
-    dst.delete();
-    M.delete();
-    contours.delete();
-    hierarchy.delete();
-    result.delete();
   }
 
   getRectInfo(contours: any, i: number) {
