@@ -28,15 +28,14 @@
           matInput
           (change)="onDeviceSelectChange($event.target.value)"
         >
-          <option value="" [selected]="!(currentDevice$ | async)">
+          <option value="" [selected]="!currentDevice">
             No Device Selected
           </option>
           <option
-            *ngFor="let device of availableDevices$ | async"
+            *ngFor="let device of availableDevices"
             [value]="device.deviceId"
             [selected]="
-              (currentDevice$ | async) &&
-              device.deviceId === (currentDevice$ | async).deviceId
+              currentDevice && device.deviceId === currentDevice.deviceId
             "
           >
             {{ device.label }}
@@ -96,6 +95,7 @@
       <button mat-icon-button [matMenuTriggerFor]="appMenu">
         <mat-icon>more_vert</mat-icon>
       </button>
+      {{ currentDevice | json }}
     </header>
 
     <section class="results" *ngIf="result">
@@ -122,7 +122,7 @@
       <button mat-icon-button (click)="clearError()">&times;</button>
     </section>
 
-    <div class="controlContainer">
+    <!-- <div class="controlContainer">
       <div>
         <p>影片解析度=> 寬:{{ video.videoWidth }}/高:{{ video.videoHeight }}</p>
         <p>
@@ -169,6 +169,6 @@
           <p>Z: {{ zoomRatio }}</p>
         </div>
       </div>
-    </div>
+    </div> -->
   </div>
 </div>
