@@ -1,9 +1,9 @@
 import { DecoderService } from './decoder.service';
 import { CameraService } from './camera.service';
 import { ElementRef, Injectable } from '@angular/core';
-import { fromEvent, Observable } from 'rxjs';
+import { BehaviorSubject, fromEvent, Observable } from 'rxjs';
 import { BarcodeFormat, BrowserMultiFormatReader } from '@zxing/browser';
-import { DecodeHintType } from '@zxing/library';
+import { DecodeHintType, ResultPoint } from '@zxing/library';
 
 @Injectable({
   providedIn: 'root',
@@ -21,10 +21,11 @@ export class ScannerService {
   windowResized$: Observable<Event>;
   codeReader: BrowserMultiFormatReader;
 
-  error: any;
-  zoomRatio = 1;
-  frameCount = 0;
+  error$ = new BehaviorSubject<any>('');
+  frameCount = new BehaviorSubject<number>(0);
+  zoomRatio = new BehaviorSubject<number>(1);
   scanPeriod = 30;
+  imageProcessCallback: Function;
 
   constructor(
     private cameraService: CameraService,
@@ -37,11 +38,13 @@ export class ScannerService {
     const widthRatio = offsetWidth / width;
     const heightRatio = offsetHeight / height;
     const cropWidth =
-      this.scannerArea.nativeElement.offsetWidth / widthRatio / this.zoomRatio;
+      this.scannerArea.nativeElement.offsetWidth /
+      widthRatio /
+      this.zoomRatio.getValue();
     const cropHeight =
       this.scannerArea.nativeElement.offsetHeight /
       heightRatio /
-      this.zoomRatio;
+      this.zoomRatio.getValue();
     const x0 = width / 2 - cropWidth / 2;
     const y0 = height / 2 - cropHeight / 2;
     return {
@@ -56,12 +59,16 @@ export class ScannerService {
     scannerArea: ElementRef<HTMLDivElement>,
     scannerContainer: ElementRef<HTMLDivElement>,
     scanResultCanvas: ElementRef<HTMLCanvasElement>,
-    snapshotContainer: ElementRef<HTMLDivElement>
+    snapshotCanvas: ElementRef<HTMLCanvasElement>,
+    snapshotContainer: ElementRef<HTMLDivElement>,
+    snapshotScanResultCanvas: ElementRef<HTMLCanvasElement>
   ) {
     this.scannerArea = scannerArea;
-    this.scanResultCanvas = scanResultCanvas;
     this.scannerContainer = scannerContainer;
+    this.scanResultCanvas = scanResultCanvas;
+    this.snapshotCanvas = snapshotCanvas;
     this.snapshotContainer = snapshotContainer;
+    this.snapshotScanResultCanvas = snapshotScanResultCanvas;
     this.videoClick$ = fromEvent(this.scannerContainer.nativeElement, 'click');
     this.videoLoaded$ = fromEvent(
       this.cameraService.camera.nativeElement,
@@ -72,16 +79,28 @@ export class ScannerService {
       'resize'
     );
     this.windowResized$ = fromEvent(window, 'resize');
-    this.videoLoaded$.subscribe(this.loadCanvas.bind(this));
+    this.videoLoaded$.subscribe(this.start.bind(this));
+    // this.videoClick$.subscribe(this.onVideoClick.bind(this));
+    this.decoderService.resultPoints$.subscribe(this.drawResult.bind(this));
+    this.zoomRatio.subscribe(this.onZoomChange.bind(this));
   }
 
-  loadCanvas() {
+  setImageProcessCallback(func: Function) {
+    this.imageProcessCallback = func;
+  }
+
+  start() {
     try {
       this.resizeWindow();
-      this.draw();
+      this.scan();
     } catch (error) {
-      this.error = error;
+      this.error$.next(error);
     }
+  }
+
+  onZoomChange(value): void {
+    this.cameraService.camera.nativeElement.style.transform = `scale(${value})`;
+    this.scanResultCanvas.nativeElement.style.transform = `scale(${value})`;
   }
 
   resizeWindow() {
@@ -131,20 +150,18 @@ export class ScannerService {
   }
 
   resetSetting() {
-    this.zoomRatio = 1;
-    this.cameraService.camera.nativeElement.style.transform = `scale(1)`;
-    this.scanResultCanvas.nativeElement.style.transform = `scale(1)`;
+    this.zoomRatio.next(1);
   }
 
-  draw() {
+  scan() {
     if (!this.cameraService.active) return;
-
-    requestAnimationFrame(this.draw.bind(this));
+    requestAnimationFrame(this.scan.bind(this));
 
     this.captureImage();
 
-    if (++this.frameCount === this.scanPeriod) {
-      this.frameCount = 0;
+    this.frameCount.next(this.frameCount.getValue() + 1);
+    if (this.frameCount.getValue() === this.scanPeriod) {
+      this.frameCount.next(0);
     } else {
       return;
     }
@@ -164,8 +181,69 @@ export class ScannerService {
       cropHeight,
       0,
       0,
-      cropWidth * this.zoomRatio,
-      cropHeight * this.zoomRatio
+      cropWidth * this.zoomRatio.getValue(),
+      cropHeight * this.zoomRatio.getValue()
+    );
+
+    if (this.imageProcessCallback) {
+      this.imageProcessCallback();
+    }
+  }
+
+  drawResult(resultPoints: ResultPoint[]): void {
+    if (resultPoints.length === 0) return;
+
+    const scanResult = this.scanResultCanvas.nativeElement;
+    const snapshotResult = this.snapshotScanResultCanvas.nativeElement;
+    const { x0, y0 } = this.cropData;
+
+    this.drawPoints(
+      scanResult,
+      resultPoints.map((p) => {
+        return {
+          x: x0 + p.getX() / this.zoomRatio.getValue(),
+          y: y0 + p.getY() / this.zoomRatio.getValue(),
+        };
+      })
+    );
+    this.drawPoints(
+      snapshotResult,
+      resultPoints.map((p) => {
+        return { x: p.getX(), y: p.getY() };
+      })
+    );
+  }
+
+  drawPoints(canvas: HTMLCanvasElement, points: any = []): void {
+    // set canvas
+    const ctx = canvas.getContext('2d');
+    ctx.clearRect(0, 0, canvas.width, canvas.height);
+    ctx.lineWidth = 4;
+    ctx.strokeStyle = 'red';
+
+    // draw points
+    ctx.beginPath();
+    ctx.moveTo(points[0].x, points[0].y);
+    points.slice(1).forEach((p) => {
+      ctx.lineTo(p.x, p.y);
+    });
+    ctx.closePath();
+    ctx.stroke();
+  }
+
+  clearPoints(): void {
+    const scanResult = this.scanResultCanvas.nativeElement;
+    const snapshotResult = this.snapshotScanResultCanvas.nativeElement;
+
+    const scanResultCtx = scanResult.getContext('2d');
+    const snapshotResultCtx = snapshotResult.getContext('2d');
+
+    scanResultCtx.clearRect(0, 0, scanResult.width, scanResult.height);
+    snapshotResultCtx.clearRect(
+      0,
+      0,
+      snapshotResult.width,
+      snapshotResult.height
     );
   }
 }

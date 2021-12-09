@@ -1,15 +1,15 @@
 <div class="scanner-shell" [hidden]="!hasDevices">
   <div #scannerContainer class="scanner-container">
     <video #video autoplay playsinline muted></video>
-    <canvas #mainPointers id="mainPointers"></canvas>
+    <canvas #scanResultCanvas id="scanResultCanvas"></canvas>
     <div #scannerArea class="scanner-area"></div>
   </div>
 
   <div #snapshotContainer class="snapshot-container">
     <img #dataMatrixTemplateImage src="assets/中棋盤格.png" alt="template" />
     <canvas #snapshotCanvas id="snapshotCanvas"></canvas>
-    <canvas #snapshotCanvas2 id="snapshotCanvas2"></canvas>
-    <canvas #snapshotPointers id="snapshotPointers"></canvas>
+    <canvas #filteredSnapshotCanvas id="filteredSnapshotCanvas"></canvas>
+    <canvas #snapshotScanResultCanvas id="snapshotScanResultCanvas"></canvas>
     <canvas #barcodeCanvas id="barcodeCanvas"></canvas>
   </div>
 
@@ -28,14 +28,15 @@
           matInput
           (change)="onDeviceSelectChange($event.target.value)"
         >
-          <option value="" [selected]="!currentDevice">
+          <option value="" [selected]="currentDevice$ | async">
             No Device Selected
           </option>
           <option
-            *ngFor="let device of availableDevices"
+            *ngFor="let device of (availableDevices$ | async) || []"
             [value]="device.deviceId"
             [selected]="
-              currentDevice && device.deviceId === currentDevice.deviceId
+              ((currentDevice$ | async) || '') &&
+              device.deviceId === currentDevice?.deviceId
             "
           >
             {{ device.label }}
@@ -62,43 +63,42 @@
         color="primary"
         (click)="onEnableImageFilter('grayScale')"
       >
-        {{ enableGrayscale ? "Grayscale" : "No Grayscale" }}
+        {{ (enableGrayscale$ | async) ? "Grayscale" : "No Grayscale" }}
       </button>
       <button
         mat-raised-button
         color="primary"
         (click)="onEnableImageFilter('equalization')"
       >
-        {{ enableEqualization ? "Equalization" : "No Equalization" }}
+        {{ (enableEqualization$ | async) ? "Equalization" : "No Equalization" }}
       </button>
       <button
         mat-raised-button
         color="primary"
         (click)="onEnableImageFilter('invertColor')"
       >
-        {{ enableInvertColor ? "Inverting" : "No Inverted" }}
+        {{ (enableInvertColor$ | async) ? "Inverting" : "No Inverted" }}
       </button>
       <button
         mat-raised-button
         color="primary"
         (click)="onEnableImageFilter('thresHold')"
       >
-        {{ enableThreshold ? "Threshold" : "No Threshold" }}
+        {{ (enableThreshold$ | async) ? "Threshold" : "No Threshold" }}
       </button>
       <button
         mat-raised-button
         color="primary"
         (click)="onEnableImageFilter('blur')"
       >
-        {{ enableBlur ? "Blur" : "No Blur" }}
+        {{ (enableBlur$ | async) ? "Blur" : "No Blur" }}
       </button>
       <button mat-icon-button [matMenuTriggerFor]="appMenu">
         <mat-icon>more_vert</mat-icon>
       </button>
-      {{ currentDevice | json }}
     </header>
 
-    <section class="results" *ngIf="result">
+    <section class="results" *ngIf="result$ | async">
       <div>
         <small>Result</small>
         <strong>{{ result }}</strong>
@@ -106,7 +106,7 @@
       <button mat-icon-button (click)="clearResult()">&times;</button>
     </section>
 
-    <section class="message" *ngIf="message">
+    <section class="message" *ngIf="message$ | async">
       <div>
         <small>Message</small>
         <strong>{{ message | json }}</strong>
@@ -114,15 +114,15 @@
       <button mat-icon-button (click)="clearMessage($event)">&times;</button>
     </section>
 
-    <section class="error" *ngIf="error">
+    <section class="error" *ngIf="error$ | async">
       <div>
         <small>Error</small>
-        <strong>{{ error }}</strong>
+        <strong>{{ error$ | async }}</strong>
       </div>
       <button mat-icon-button (click)="clearError()">&times;</button>
     </section>
 
-    <!-- <div class="controlContainer">
+    <div class="controlContainer">
       <div>
         <p>影片解析度=> 寬:{{ video.videoWidth }}/高:{{ video.videoHeight }}</p>
         <p>
@@ -139,36 +139,36 @@
           <mat-slider
             vertical
             (input)="onThresHoldChange($event)"
-            [value]="thresHoldValue"
+            [value]="thresHoldValue$ | async"
             min="0"
             max="255"
             step="1"
           ></mat-slider>
-          <p>T: {{ thresHoldValue }}</p>
+          <p>T: {{ thresHoldValue$ | async }}</p>
         </div>
         <div class="sliderContainer">
           <mat-slider
             vertical
             (input)="onBlurChange($event)"
-            [value]="blurValue"
+            [value]="blurValue$ | async"
             min="1"
             max="20"
             step="0"
           ></mat-slider>
-          <p>B: {{ blurValue }}</p>
+          <p>B: {{ blurValue$ | async }}</p>
         </div>
         <div class="sliderContainer">
           <mat-slider
             vertical
             (input)="onZoomChange($event)"
-            [value]="zoomRatio"
+            [value]="zoomRatio$ | async"
             min="1"
             max="5"
             step="0.1"
           ></mat-slider>
-          <p>Z: {{ zoomRatio }}</p>
+          <p>Z: {{ zoomRatio$ | async }}</p>
         </div>
       </div>
-    </div> -->
+    </div>
   </div>
 </div>

@@ -1,6 +1,8 @@
+import { ScannerService } from './scanner.service';
 import { ElementRef, Injectable } from '@angular/core';
 import { BrowserMultiFormatReader } from '@zxing/browser';
-import { BarcodeFormat, DecodeHintType } from '@zxing/library';
+import { BarcodeFormat, DecodeHintType, ResultPoint } from '@zxing/library';
+import { BehaviorSubject } from 'rxjs';
 
 @Injectable({
   providedIn: 'root',
@@ -11,10 +13,13 @@ export class DecoderService {
     any
   >();
 
-  constructor() {}
+  constructor() {
+    this.codeReader = new BrowserMultiFormatReader();
+  }
 
+  result$ = new BehaviorSubject<string>('');
+  resultPoints$ = new BehaviorSubject<ResultPoint[]>([]);
   codeReader: BrowserMultiFormatReader;
-  result: string;
 
   get hints() {
     return this._hints;
@@ -58,12 +63,12 @@ export class DecoderService {
         decodedCanvas.nativeElement
         // this.snapshotCanvas2.nativeElement
       );
-      this.result = result.getText();
-      // this.resultPoints$.next(result.getResultPoints());
+      this.result$.next(result.getText());
+      this.resultPoints$.next(result.getResultPoints());
       console.log(result);
     } catch (error) {
       console.log('Not Found Result');
-      // this.clearPoints();
+      // this.scannerService.clearPoints();
     }
   }
 }

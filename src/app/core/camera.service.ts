@@ -8,10 +8,10 @@ export class CameraService {
   camera: ElementRef<HTMLVideoElement>;
   currentDevice$ = new BehaviorSubject<MediaDeviceInfo>(null);
   availableDevices$ = new BehaviorSubject<MediaDeviceInfo[]>([]);
+  error$ = new BehaviorSubject<any>('');
   videoLoaded$: Observable<Event>;
   constrains: any;
   stream: any;
-  error: any;
   active: boolean;
   hasPermission: boolean;
   hasDevices: boolean;
@@ -55,8 +55,7 @@ export class CameraService {
       }
       await this.loadDevices();
     } catch (error) {
-      this.error = error;
-      console.log(error);
+      this.error$.next(error);
     }
   }
 

@@ -35,7 +35,7 @@
     left: 0;
   }
 
-  #mainPointers {
+  #scanResultCanvas {
     border: 1px solid red;
   }
 
@@ -75,13 +75,13 @@
     height: 100px;
   }
 
-  #snapshotPointers {
+  #snapshotScanResultCanvas {
     position: absolute;
     top: 0;
     left: 0;
   }
 
-  #snapshotCanvas2 {
+  #filteredSnapshotCanvas {
     position: absolute;
     top: -200px;
     left: 0;
