@@ -22,8 +22,8 @@ export class ScannerService {
   codeReader: BrowserMultiFormatReader;
 
   error$ = new BehaviorSubject<any>('');
-  frameCount = new BehaviorSubject<number>(0);
-  zoomRatio = new BehaviorSubject<number>(1);
+  frameCount$ = new BehaviorSubject<number>(0);
+  zoomRatio$ = new BehaviorSubject<number>(1);
   scanPeriod = 30;
   imageProcessCallback: Function;
 
@@ -40,11 +40,11 @@ export class ScannerService {
     const cropWidth =
       this.scannerArea.nativeElement.offsetWidth /
       widthRatio /
-      this.zoomRatio.getValue();
+      this.zoomRatio$.getValue();
     const cropHeight =
       this.scannerArea.nativeElement.offsetHeight /
       heightRatio /
-      this.zoomRatio.getValue();
+      this.zoomRatio$.getValue();
     const x0 = width / 2 - cropWidth / 2;
     const y0 = height / 2 - cropHeight / 2;
     return {
@@ -69,6 +69,8 @@ export class ScannerService {
     this.snapshotCanvas = snapshotCanvas;
     this.snapshotContainer = snapshotContainer;
     this.snapshotScanResultCanvas = snapshotScanResultCanvas;
+
+    //events
     this.videoClick$ = fromEvent(this.scannerContainer.nativeElement, 'click');
     this.videoLoaded$ = fromEvent(
       this.cameraService.camera.nativeElement,
@@ -79,10 +81,14 @@ export class ScannerService {
       'resize'
     );
     this.windowResized$ = fromEvent(window, 'resize');
+
+    // subscribes
     this.videoLoaded$.subscribe(this.start.bind(this));
-    // this.videoClick$.subscribe(this.onVideoClick.bind(this));
     this.decoderService.resultPoints$.subscribe(this.drawResult.bind(this));
-    this.zoomRatio.subscribe(this.onZoomChange.bind(this));
+    this.zoomRatio$.subscribe(this.onZoomChange.bind(this));
+    this.videoClick$.subscribe(this.cameraService.pauseAndPlay);
+    this.windowResized$.subscribe(this.resizeWindow.bind(this));
+    this.videoResized$.subscribe(this.resizeWindow.bind(this));
   }
 
   setImageProcessCallback(func: Function) {
@@ -150,7 +156,7 @@ export class ScannerService {
   }
 
   resetSetting() {
-    this.zoomRatio.next(1);
+    this.zoomRatio$.next(1);
   }
 
   scan() {
@@ -159,9 +165,9 @@ export class ScannerService {
 
     this.captureImage();
 
-    this.frameCount.next(this.frameCount.getValue() + 1);
-    if (this.frameCount.getValue() === this.scanPeriod) {
-      this.frameCount.next(0);
+    this.frameCount$.next(this.frameCount$.getValue() + 1);
+    if (this.frameCount$.getValue() === this.scanPeriod) {
+      this.frameCount$.next(0);
     } else {
       return;
     }
@@ -181,8 +187,8 @@ export class ScannerService {
       cropHeight,
       0,
       0,
-      cropWidth * this.zoomRatio.getValue(),
-      cropHeight * this.zoomRatio.getValue()
+      cropWidth * this.zoomRatio$.getValue(),
+      cropHeight * this.zoomRatio$.getValue()
     );
 
     if (this.imageProcessCallback) {
@@ -191,7 +197,10 @@ export class ScannerService {
   }
 
   drawResult(resultPoints: ResultPoint[]): void {
-    if (resultPoints.length === 0) return;
+    if (resultPoints.length === 0) {
+      this.clearPoints();
+      return;
+    }
 
     const scanResult = this.scanResultCanvas.nativeElement;
     const snapshotResult = this.snapshotScanResultCanvas.nativeElement;
@@ -201,8 +210,8 @@ export class ScannerService {
       scanResult,
       resultPoints.map((p) => {
         return {
-          x: x0 + p.getX() / this.zoomRatio.getValue(),
-          y: y0 + p.getY() / this.zoomRatio.getValue(),
+          x: x0 + p.getX() / this.zoomRatio$.getValue(),
+          y: y0 + p.getY() / this.zoomRatio$.getValue(),
         };
       })
     );

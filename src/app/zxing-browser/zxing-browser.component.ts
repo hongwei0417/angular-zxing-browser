@@ -1,4 +1,3 @@
-import { ControlService } from './../core/control.service';
 import { ProcessControlService } from './../core/process-control.service';
 import { NativeImgProcessService } from './../core/native-img-process.service';
 import { OpencvService } from './../core/opencv.service';
@@ -78,10 +77,8 @@ export class ZxingBrowserComponent implements OnInit, AfterViewInit {
     private scannerService: ScannerService,
     private decoderService: DecoderService,
     private opencvService: OpencvService,
-    private nativeImgProcessService: NativeImgProcessService,
     private loggerService: LoggerService,
-    private processControlService: ProcessControlService,
-    private controlService: ControlService
+    private processControlService: ProcessControlService
   ) {}
 
   ngOnInit(): void {
@@ -91,6 +88,17 @@ export class ZxingBrowserComponent implements OnInit, AfterViewInit {
     this.result$ = this.decoderService.result$.asObservable();
     this.message$ = this.loggerService.message$.asObservable();
     this.error$ = this.loggerService.error$.asObservable();
+    this.blurValue$ = this.processControlService.blurValue$.asObservable();
+    this.thresHoldValue$ =
+      this.processControlService.thresHoldValue$.asObservable();
+    this.enableGrayscale$ =
+      this.processControlService.enableGrayscale$.asObservable();
+    this.enableEqualization$ =
+      this.processControlService.enableEqualization$.asObservable();
+    this.enableInvertColor$ =
+      this.processControlService.enableInvertColor$.asObservable();
+    this.enableThreshold$ =
+      this.processControlService.enableThreshold$.asObservable();
   }
 
   ngAfterViewInit(): void {
@@ -109,15 +117,7 @@ export class ZxingBrowserComponent implements OnInit, AfterViewInit {
         this.changeImageProcessMethod();
       }
     });
-    this.blurValue$ = this.controlService.blurValue$.asObservable();
-    this.thresHoldValue$ = this.controlService.thresHoldValue$.asObservable();
-    this.enableGrayscale$ = this.controlService.enableGrayscale$.asObservable();
-    this.enableEqualization$ =
-      this.controlService.enableEqualization$.asObservable();
-    this.enableInvertColor$ =
-      this.controlService.enableInvertColor$.asObservable();
-    this.enableThreshold$ = this.controlService.enableThreshold$.asObservable();
-    // this.initInteract();
+    this.initInteract();
   }
 
   changeImageProcessMethod() {
@@ -150,14 +150,6 @@ export class ZxingBrowserComponent implements OnInit, AfterViewInit {
         .getValue()
         .find((x) => x.deviceId === selected)
     );
-  }
-
-  onVideoClick() {
-    if (this.video.nativeElement.paused) {
-      this.video.nativeElement.play();
-    } else {
-      this.video.nativeElement.pause();
-    }
   }
 
   setScannerArea(mode: string) {
@@ -211,28 +203,28 @@ export class ZxingBrowserComponent implements OnInit, AfterViewInit {
   onEnableImageFilter(type: string) {
     const action = {
       grayScale: () => {
-        this.controlService.enableGrayscale$.next(
-          !this.controlService.enableGrayscale$.getValue()
+        this.processControlService.enableGrayscale$.next(
+          !this.processControlService.enableGrayscale$.getValue()
         );
       },
       equalization: () => {
-        this.controlService.enableEqualization$.next(
-          !this.controlService.enableEqualization$.getValue()
+        this.processControlService.enableEqualization$.next(
+          !this.processControlService.enableEqualization$.getValue()
         );
       },
       invertColor: () => {
-        this.controlService.enableInvertColor$.next(
-          !this.controlService.enableInvertColor$.getValue()
+        this.processControlService.enableInvertColor$.next(
+          !this.processControlService.enableInvertColor$.getValue()
         );
       },
       thresHold: () => {
-        this.controlService.enableThreshold$.next(
-          !this.controlService.enableThreshold$.getValue()
+        this.processControlService.enableThreshold$.next(
+          !this.processControlService.enableThreshold$.getValue()
         );
       },
       blur: () => {
-        this.controlService.enableBlur$.next(
-          !this.controlService.enableBlur$.getValue()
+        this.processControlService.enableBlur$.next(
+          !this.processControlService.enableBlur$.getValue()
         );
       },
     };
@@ -317,14 +309,14 @@ export class ZxingBrowserComponent implements OnInit, AfterViewInit {
   }
 
   onZoomChange(change: MatSliderChange): void {
-    this.scannerService.zoomRatio.next(change.value);
+    this.scannerService.zoomRatio$.next(change.value);
   }
 
   onThresHoldChange(change: MatSliderChange): void {
-    this.controlService.thresHoldValue$.next(change.value);
+    this.processControlService.thresHoldValue$.next(change.value);
   }
 
   onBlurChange(change: MatSliderChange): void {
-    this.controlService.blurValue$.next(change.value);
+    this.processControlService.blurValue$.next(change.value);
   }
 }

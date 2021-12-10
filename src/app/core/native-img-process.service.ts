@@ -1,41 +1,44 @@
-import { ControlService } from './control.service';
 import { ProcessControlService } from './process-control.service';
 import { ScannerService } from './scanner.service';
 import { ElementRef, Injectable } from '@angular/core';
 import { BehaviorSubject } from 'rxjs';
+import { ControlValue } from './DataObject';
 
 @Injectable({
   providedIn: 'root',
 })
 export class NativeImgProcessService {
-  constructor(
-    private scannerService: ScannerService,
-    private controlService: ControlService
-  ) {}
+  error$ = new BehaviorSubject<any>(false);
+  controls: ControlValue;
 
-  imageFilter(canvas: ElementRef<HTMLCanvasElement>) {
-    const { x0, y0, cropWidth, cropHeight } = this.scannerService.cropData;
-    const snapShotCtx = canvas.nativeElement.getContext('2d');
-    const imageData = snapShotCtx.getImageData(
-      0,
-      0,
-      cropWidth * this.scannerService.zoomRatio.getValue(),
-      cropHeight * this.scannerService.zoomRatio.getValue()
-    );
+  constructor(private scannerService: ScannerService) {}
 
-    if (this.controlService.enableGrayscale$.getValue())
-      this.grayscale(imageData.data);
-    if (this.controlService.enableEqualization$.getValue())
-      this.equalization(imageData.data);
-    if (this.controlService.enableInvertColor$.getValue())
-      this.invertColors(imageData.data);
-    if (this.controlService.enableBlur$.getValue())
-      this.blur(imageData, this.controlService.blurValue$.getValue(), 1);
-    if (this.controlService.enableThreshold$.getValue()) {
-      this.OTSU(imageData.data, imageData.width * imageData.height);
+  // * 進行影像處理
+  imageFilter(canvas: ElementRef<HTMLCanvasElement>, _controls: ControlValue) {
+    try {
+      const { x0, y0, cropWidth, cropHeight } = this.scannerService.cropData;
+      const snapShotCtx = canvas.nativeElement.getContext('2d');
+      const imageData = snapShotCtx.getImageData(
+        0,
+        0,
+        cropWidth * this.scannerService.zoomRatio$.getValue(),
+        cropHeight * this.scannerService.zoomRatio$.getValue()
+      );
+      this.controls = _controls;
+
+      if (this.controls.enableGrayscale) this.grayscale(imageData.data);
+      if (this.controls.enableEqualization) this.equalization(imageData.data);
+      if (this.controls.enableInvertColor) this.invertColors(imageData.data);
+      if (this.controls.enableBlur)
+        this.blur(imageData, this.controls.blurValue, 1);
+      if (this.controls.enableThreshold) {
+        this.OTSU(imageData.data, imageData.width * imageData.height);
+      }
+      this.thresHold(imageData.data);
+      snapShotCtx.putImageData(imageData, 0, 0);
+    } catch (error) {
+      this.error$.next(error);
     }
-    this.thresHold(imageData.data);
-    snapShotCtx.putImageData(imageData, 0, 0);
   }
 
   // * 反轉
@@ -105,7 +108,7 @@ export class NativeImgProcessService {
       let r = data[i];
       let g = data[i + 1];
       let b = data[i + 2];
-      let value = r <= this.controlService.thresHoldValue$.getValue() ? 0 : 255;
+      let value = r <= this.controls.thresHoldValue ? 0 : 255;
       data[i] = data[i + 1] = data[i + 2] = value;
       // data[i] = data[i] > this.thresHoldValue ? 0 : data[i];
       // data[i + 2] = data[i + 2] > this.thresHoldValue ? 0 : data[i] + 2;
@@ -237,7 +240,7 @@ export class NativeImgProcessService {
         threshold = i;
       }
     }
-    this.controlService.thresHoldValue$.next(threshold);
+    this.controls.thresHoldValue = threshold;
     return threshold;
   }
 

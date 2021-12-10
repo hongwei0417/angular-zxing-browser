@@ -1,20 +1,18 @@
-import { ControlService } from './control.service';
-import { ScannerService } from './scanner.service';
+import { ProcessControlService } from './process-control.service';
 import { NgOpenCVService, OpenCVLoadResult } from 'ng-open-cv';
 import { ElementRef, Injectable } from '@angular/core';
 import { filter } from 'rxjs/operators';
 import { BehaviorSubject } from 'rxjs';
+import { ControlValue, ImageProcessHtmlObj } from './DataObject';
 
 @Injectable({
   providedIn: 'root',
 })
 export class OpencvService {
   loaded = new BehaviorSubject<boolean>(false);
+  error$ = new BehaviorSubject<any>(false);
 
-  constructor(
-    private ngOpenCVService: NgOpenCVService,
-    private controlService: ControlService
-  ) {
+  constructor(private ngOpenCVService: NgOpenCVService) {
     this.ngOpenCVService.isReady$
       .pipe(filter((result: OpenCVLoadResult) => result.ready))
       .subscribe(() => {
@@ -23,96 +21,89 @@ export class OpencvService {
       });
   }
 
-  matchOneTemplate(
-    original: ElementRef<HTMLCanvasElement>,
-    filtered: ElementRef<HTMLCanvasElement>,
-    barcode: ElementRef<HTMLCanvasElement>,
-    template: ElementRef<HTMLImageElement>
-  ) {
-    let originalSrc = cv.imread(original.nativeElement);
-    let filteredSrc = cv.imread(original.nativeElement);
-    let templateSrc = cv.imread(template.nativeElement);
-    let dst = cv.Mat.zeros(filteredSrc.rows, filteredSrc.cols, cv.CV_8UC3);
-    let M = new cv.Mat();
+  matchOneTemplate(htmlObj: ImageProcessHtmlObj, controls: ControlValue) {
+    try {
+      let originalSrc = cv.imread(htmlObj.original.nativeElement);
+      let filteredSrc = cv.imread(htmlObj.original.nativeElement);
+      let templateSrc = cv.imread(htmlObj.template.nativeElement);
+      let dst = cv.Mat.zeros(filteredSrc.rows, filteredSrc.cols, cv.CV_8UC3);
+      let M = new cv.Mat();
 
-    // * 灰階
-    cv.cvtColor(filteredSrc, filteredSrc, cv.COLOR_RGBA2GRAY, 0);
-    cv.cvtColor(templateSrc, templateSrc, cv.COLOR_RGBA2GRAY, 0);
-    // * 閾值
-    cv.threshold(
-      filteredSrc,
-      filteredSrc,
-      this.controlService.thresHoldValue$.getValue(),
-      255,
-      this.controlService.enableInvertColor$.getValue()
-        ? cv.THRESH_BINARY_INV
-        : cv.THRESH_BINARY
-    );
-    //   // * 形態學
-    M = cv.getStructuringElement(cv.MORPH_RECT, new cv.Size(3, 3));
-    cv.morphologyEx(filteredSrc, filteredSrc, cv.MORPH_OPEN, M);
-    M = cv.getStructuringElement(cv.MORPH_RECT, new cv.Size(5, 5));
-    cv.morphologyEx(filteredSrc, filteredSrc, cv.MORPH_CLOSE, M);
+      // * 灰階
+      cv.cvtColor(filteredSrc, filteredSrc, cv.COLOR_RGBA2GRAY, 0);
+      cv.cvtColor(templateSrc, templateSrc, cv.COLOR_RGBA2GRAY, 0);
+      // * 閾值
+      cv.threshold(
+        filteredSrc,
+        filteredSrc,
+        controls.thresHoldValue,
+        255,
+        controls.enableThreshold ? cv.THRESH_BINARY_INV : cv.THRESH_BINARY
+      );
+      //   // * 形態學
+      M = cv.getStructuringElement(cv.MORPH_RECT, new cv.Size(3, 3));
+      cv.morphologyEx(filteredSrc, filteredSrc, cv.MORPH_OPEN, M);
+      M = cv.getStructuringElement(cv.MORPH_RECT, new cv.Size(5, 5));
+      cv.morphologyEx(filteredSrc, filteredSrc, cv.MORPH_CLOSE, M);
 
-    // * 樣板配對
-    let mask = new cv.Mat();
-    cv.matchTemplate(filteredSrc, templateSrc, dst, cv.TM_CCOEFF, mask);
-    let result = cv.minMaxLoc(dst, mask);
-    let maxPoint = result.maxLoc;
-    let color = new cv.Scalar(255, 0, 0, 255);
+      // * 樣板配對
+      let mask = new cv.Mat();
+      cv.matchTemplate(filteredSrc, templateSrc, dst, cv.TM_CCOEFF, mask);
+      let result = cv.minMaxLoc(dst, mask);
+      let maxPoint = result.maxLoc;
+      let color = new cv.Scalar(255, 0, 0, 255);
 
-    let point = new cv.Point(
-      maxPoint.x + templateSrc.cols,
-      maxPoint.y + templateSrc.rows
-    );
-    cv.rectangle(originalSrc, maxPoint, point, color, 2, cv.LINE_8, 0);
+      let point = new cv.Point(
+        maxPoint.x + templateSrc.cols,
+        maxPoint.y + templateSrc.rows
+      );
+      cv.rectangle(originalSrc, maxPoint, point, color, 2, cv.LINE_8, 0);
 
-    // * 擷取barcode
-    let rect = new cv.Rect(
-      maxPoint.x,
-      maxPoint.y,
-      templateSrc.cols,
-      templateSrc.rows
-    );
+      // * 擷取barcode
+      let rect = new cv.Rect(
+        maxPoint.x,
+        maxPoint.y,
+        templateSrc.cols,
+        templateSrc.rows
+      );
 
-    let area = filteredSrc.roi(rect);
-    let copyArea = area.clone();
-    cv.copyMakeBorder(
-      copyArea,
-      copyArea,
-      30,
-      30,
-      30,
-      30,
-      cv.BORDER_CONSTANT,
-      new cv.Scalar(255, 255, 255, 255)
-    );
+      let area = filteredSrc.roi(rect);
+      let copyArea = area.clone();
+      cv.copyMakeBorder(
+        copyArea,
+        copyArea,
+        30,
+        30,
+        30,
+        30,
+        cv.BORDER_CONSTANT,
+        new cv.Scalar(255, 255, 255, 255)
+      );
 
-    // * 顯示
-    cv.imshow(original.nativeElement, originalSrc);
-    cv.imshow(filtered.nativeElement, filteredSrc);
-    cv.imshow(barcode.nativeElement, copyArea);
+      // * 顯示
+      cv.imshow(htmlObj.original.nativeElement, originalSrc);
+      cv.imshow(htmlObj.filtered.nativeElement, filteredSrc);
+      cv.imshow(htmlObj.barcode.nativeElement, copyArea);
 
-    // * 釋放
-    originalSrc.delete();
-    filteredSrc.delete();
-    templateSrc.delete();
-    dst.delete();
-    M.delete();
-    mask.delete();
-    area.delete();
-    copyArea.delete();
+      // * 釋放
+      originalSrc.delete();
+      filteredSrc.delete();
+      templateSrc.delete();
+      dst.delete();
+      M.delete();
+      mask.delete();
+      area.delete();
+      copyArea.delete();
+    } catch (error) {
+      this.error$.next(error);
+    }
   }
 
-  contours(
-    original: ElementRef<HTMLCanvasElement>,
-    filtered: ElementRef<HTMLCanvasElement>,
-    barcode: ElementRef<HTMLCanvasElement>
-  ) {
+  contours(htmlObj: ImageProcessHtmlObj, controls: ControlValue) {
     try {
-      let originalSrc = cv.imread(original.nativeElement);
-      let filteredSrc = cv.imread(filtered.nativeElement);
-      let barcodeSrc = cv.imread(barcode.nativeElement);
+      let originalSrc = cv.imread(htmlObj.original.nativeElement);
+      let filteredSrc = cv.imread(htmlObj.filtered.nativeElement);
+      let barcodeSrc = cv.imread(htmlObj.barcode.nativeElement);
       let dst = cv.Mat.zeros(filteredSrc.rows, filteredSrc.cols, cv.CV_8UC3);
       let M = new cv.Mat();
       let contours = new cv.MatVector();
@@ -213,12 +204,10 @@ export class OpencvService {
       cv.threshold(
         filteredSrc,
         filteredSrc,
-        this.controlService.thresHoldValue$.getValue(),
+        controls.thresHoldValue,
         255,
         cv.THRESH_OTSU +
-          (this.controlService.enableInvertColor$.getValue()
-            ? cv.THRESH_BINARY_INV
-            : cv.THRESH_BINARY)
+          (controls.enableThreshold ? cv.THRESH_BINARY_INV : cv.THRESH_BINARY)
       );
 
       // * 區域二值化
@@ -304,7 +293,6 @@ export class OpencvService {
       // }
 
       // * 邊界矩型
-      let result = new cv.Mat();
       let maxIndex = null;
       for (let i = 0; i < contours.size(); ++i) {
         let cnt = contours.get(i);
@@ -349,13 +337,13 @@ export class OpencvService {
         cv.threshold(
           roiRect,
           roiRect,
-          this.controlService.thresHoldValue$,
+          controls.thresHoldValue,
           255,
           cv.THRESH_BINARY_INV
         );
         cv.copyMakeBorder(
           roiRect,
-          result,
+          barcodeSrc,
           200,
           200,
           200,
@@ -368,10 +356,10 @@ export class OpencvService {
       }
 
       // * 顯示
-      cv.imshow(original.nativeElement, originalSrc);
-      cv.imshow(filtered.nativeElement, filteredSrc);
-      if (result.size().width && result.size().height) {
-        cv.imshow(barcodeSrc.nativeElement, barcodeSrc);
+      cv.imshow(htmlObj.original.nativeElement, originalSrc);
+      cv.imshow(htmlObj.filtered.nativeElement, filteredSrc);
+      cv.imshow(htmlObj.barcode.nativeElement, barcodeSrc);
+      if (barcodeSrc.size().width && barcodeSrc.size().height) {
       }
 
       // * 釋放
@@ -382,9 +370,8 @@ export class OpencvService {
       M.delete();
       contours.delete();
       hierarchy.delete();
-      // result.delete();
     } catch (error) {
-      console.log(error);
+      this.error$.next(error);
     }
   }
 

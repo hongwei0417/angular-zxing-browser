@@ -46,6 +46,7 @@ export class CameraService {
       this.stop();
       const stream = await navigator.mediaDevices.getUserMedia(this.constrains);
       this.hasPermission = true;
+      console.log(this.constrains);
 
       if (this.currentDevice$.getValue()) {
         this.camera.nativeElement.srcObject = stream;
@@ -86,5 +87,13 @@ export class CameraService {
     };
     this.constrains = constrains;
     this.currentDevice$.next(device);
+  }
+
+  pauseAndPlay() {
+    if (this.camera.nativeElement.paused) {
+      this.camera.nativeElement.play();
+    } else {
+      this.camera.nativeElement.pause();
+    }
   }
 }

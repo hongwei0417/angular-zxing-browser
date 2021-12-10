@@ -35,8 +35,8 @@
             *ngFor="let device of (availableDevices$ | async) || []"
             [value]="device.deviceId"
             [selected]="
-              ((currentDevice$ | async) || '') &&
-              device.deviceId === currentDevice?.deviceId
+              !!(currentDevice$ | async) &&
+              device.deviceId === (currentDevice$ | async)?.deviceId
             "
           >
             {{ device.label }}
@@ -101,7 +101,7 @@
     <section class="results" *ngIf="result$ | async">
       <div>
         <small>Result</small>
-        <strong>{{ result }}</strong>
+        <strong>{{ result$ | async }}</strong>
       </div>
       <button mat-icon-button (click)="clearResult()">&times;</button>
     </section>
@@ -109,7 +109,7 @@
     <section class="message" *ngIf="message$ | async">
       <div>
         <small>Message</small>
-        <strong>{{ message | json }}</strong>
+        <strong>{{ message$ | async | json }}</strong>
       </div>
       <button mat-icon-button (click)="clearMessage($event)">&times;</button>
     </section>

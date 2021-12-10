@@ -59,16 +59,14 @@ export class DecoderService {
   decodeCanvas(decodedCanvas: ElementRef<HTMLCanvasElement>) {
     try {
       const result = this.codeReader.decodeFromCanvas(
-        // this.barcodeCanvas.nativeElement
         decodedCanvas.nativeElement
-        // this.snapshotCanvas2.nativeElement
       );
       this.result$.next(result.getText());
       this.resultPoints$.next(result.getResultPoints());
       console.log(result);
     } catch (error) {
       console.log('Not Found Result');
-      // this.scannerService.clearPoints();
+      this.resultPoints$.next([]);
     }
   }
 }
